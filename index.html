@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pixel Adventure</title>
+<style>
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: #1a1c2c;
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden;
+  }
+  canvas {
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    max-width: 100vw; max-height: 100vh;
+    aspect-ratio: 16 / 9;
+    width: 100vw;
+  }
+</style>
+</head>
+<body>
+<canvas id="game" width="480" height="270"></canvas>
+<script src="game.js"></script>
+</body>
+</html>
