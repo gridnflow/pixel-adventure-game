@@ -24,8 +24,8 @@ sandbox.globalThis = sandbox;
 const context = vm.createContext(sandbox);
 vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'game.js'), 'utf8'), context);
 
-// 수제 레벨의 의도된 예외: 스테이지 3은 더블 점프 전제의 7타일 구덩이가 있음
-const GAP_EXCEPTIONS = { 3: 7 };
+// 수제 레벨의 의도된 예외: 스테이지 21(수제 설원 레벨)은 더블 점프 전제의 7타일 구덩이가 있음
+const GAP_EXCEPTIONS = { 21: 7 };
 
 const result = vm.runInContext(`
 (() => {
@@ -52,6 +52,17 @@ const result = vm.runInContext(`
       maxRun = Math.max(maxRun, run);
     }
     maxRuns.push(maxRun);
+    // 열쇠/자물쇠 (W4+, 스테이지 31부터): 열쇠가 있고 자물쇠보다 앞(왼쪽)에 있어야 함
+    if (stage >= 31) {
+      let keyX = -1, lockX = -1;
+      for (let y = 0; y < L.h; y++) for (let x = 0; x < L.w; x++) {
+        if (L.grid[y][x] === 'K' && keyX < 0) keyX = x;
+        if (L.grid[y][x] === 'L' && lockX < 0) lockX = x;
+      }
+      if (keyX < 0) problems.push('stage ' + stage + ': no key');
+      if (lockX < 0) problems.push('stage ' + stage + ': no lock gate');
+      if (keyX >= 0 && lockX >= 0 && keyX >= lockX) problems.push('stage ' + stage + ': key after lock');
+    }
   }
   return { count: LEVELS.length, problems, maxRuns };
 })()

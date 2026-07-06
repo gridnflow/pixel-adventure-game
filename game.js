@@ -40,6 +40,8 @@ const T = {
   TOP_GRASS: [20, 21, 22, 23],
   TOP_SAND: [60, 61, 62, 63],
   TOP_SNOW: [80, 81, 82, 83],
+  TOP_ROCK: [40, 41, 42, 43],
+  TOP_GRASS2: [0, 1, 2, 3],
   DIRT: [4, 5, 24, 25],       // 테두리 없는 순수 흙 (샘플 이미지 기준)
   PLAT: 146,
   CRATE: 26,
@@ -57,6 +59,7 @@ const T = {
   SPIKES: 68,               // 가시 (밟으면 피해)
   BOUNCE: [15, 12, 13, 14], // 빨간 버섯 발판 [단독, 왼, 중, 오] — 밟으면 슈퍼 점프
   WATER_TOP: 33, WATER: 53, // 구덩이 물 (장식)
+  KEY: 27, LOCK: 28,        // 열쇠 & 자물쇠 문 (황야 월드부터)
   // 장식 타일
   FENCE: 147, BENCH: 146, SNOWMAN: 145, SNOWPILE: 148,
   SPROUT: 124, SPROUT2: 125, FLOWER: 144, TRUNK: 137, FENCE_GATE: 106,
@@ -123,6 +126,9 @@ class LevelBuilder {
   spike(x, y) { this.set(x, y, '^'); }
   bounce(x, y) { this.set(x, y, 'B'); }
   water(x, y) { this.set(x, y, 'w'); }
+  heart(x, y) { this.set(x, y, 'H'); }
+  key(x, y) { this.set(x, y, 'K'); }
+  lock(x, y) { this.set(x, y, 'L'); }
   enemy(type, x, y, opt) { this.entities.push(Object.assign({ type, tx: x, ty: y }, opt || {})); }
 }
 
@@ -253,9 +259,9 @@ function buildLevel2() {
   return L;
 }
 
-// 레벨 3: 산 (고급 도전)
+// 레벨 3: 설원 (고급 도전, 월드 3 오프닝)
 function buildLevel3() {
-  const L = new LevelBuilder(160, 15, 'mountain');
+  const L = new LevelBuilder(160, 15, 'snow');
   L.spawn(2, 10);
   L.ground(0, 15, 12);
   L.deco(5, 11, 's');
@@ -351,22 +357,37 @@ function mulberry32(seed) {
 }
 function ri(rng, min, max) { return min + Math.floor(rng() * (max - min + 1)); }
 
+// ---------- 월드 구성 (10스테이지 = 1월드) ----------
+// 월드마다 테마·기믹·아이템이 순차 해금된다:
+//   W1 초원: 기본 + 버섯 발판 / W2 사막: 가시·워커 / W3 설원: 벌·하트(미끄러운 바닥)
+//   W4 황야: 열쇠+자물쇠 문 / W5 밤의 숲: 전부 조합
+const WORLDS = [
+  { name: '초원',    theme: 'green' },
+  { name: '사막',    theme: 'desert' },
+  { name: '설원',    theme: 'snow' },
+  { name: '황야',    theme: 'rock' },
+  { name: '밤의 숲', theme: 'night' },
+];
+function worldOf(levelIdx) { return Math.min(WORLDS.length - 1, Math.floor(levelIdx / 10)); }
+
 const DECOS = {
-  green:    ['t', 'g', 'm', 'h', 'l', 't'],
-  desert:   ['c', 'u', 'k', 's', 'c', 'u'],
-  mountain: ['n', 'f', 'r', 't', 'k', 'r'],
+  green:  ['t', 'g', 'm', 'h', 'l', 't'],
+  desert: ['c', 'u', 'k', 's', 'c', 'u'],
+  snow:   ['n', 'f', 'r', 't', 'k', 'r'],
+  rock:   ['k', 'u', 'c', 's', 'k', 'm'],
+  night:  ['t', 'm', 'g', 'l', 't', 'h'],
 };
 
-// 지상 적 풀: 난이도에 따라 슬라임 → 워커/톱니 비율 상승
-function groundEnemyType(rng, d) {
+// 지상 적 풀: 워커는 W2부터, 난이도에 따라 슬라임 → 워커/톱니 비율 상승
+function groundEnemyType(rng, d, world) {
   const r = rng();
   if (r < 0.18 + d * 0.32) return 'saw';
-  if (r < 0.75 - d * 0.15) return 'slime';
-  return 'walker';
+  if (world >= 1 && r > 0.75 - d * 0.15) return 'walker';
+  return 'slime';
 }
-// 비행 적 풀
-function airEnemyType(rng, d) {
-  return rng() < 0.3 + d * 0.4 ? 'bee' : 'fly';
+// 비행 적 풀: 벌은 W3부터
+function airEnemyType(rng, d, world) {
+  return world >= 2 && rng() < 0.3 + d * 0.4 ? 'bee' : 'fly';
 }
 
 // 평지: 코인/적/가시/상자/장식 배치. 항상 지면으로 끝남
@@ -379,15 +400,17 @@ function segFlat(L, x, rng, d) {
   }
   const enemyN = rng() < 0.35 + d * 0.55 ? (rng() < d * 0.6 ? 2 : 1) : 0;
   for (let i = 0; i < enemyN; i++) {
-    L.enemy(groundEnemyType(rng, d), x + 3 + Math.floor(rng() * (len - 5)), 11);
+    L.enemy(groundEnemyType(rng, d, L.world), x + 3 + Math.floor(rng() * (len - 5)), 11);
   }
-  // 가시: 순찰 적이 없는 평지에만, 위에 코인으로 점프 유도
-  if (enemyN === 0 && rng() < 0.25 + d * 0.4) {
+  // 가시 (W2부터): 순찰 적이 없는 평지에만, 위에 코인으로 점프 유도
+  if (L.world >= 1 && enemyN === 0 && rng() < 0.25 + d * 0.4) {
     const sx = x + ri(rng, 3, len - 4);
     L.spike(sx, 11);
     if (rng() < 0.3 + d * 0.4) L.spike(sx + 1, 11);
     L.coin(sx, 8);
   }
+  // 하트 회복 아이템 (W3부터)
+  if (L.world >= 2 && rng() < 0.07) L.heart(x + ri(rng, 2, len - 3), 8);
   if (rng() < 0.3) L.qbox(x + ri(rng, 2, len - 3), 8);
   if (rng() < 0.25) {
     const cx = x + ri(rng, 2, len - 3);
@@ -408,7 +431,7 @@ function segPit(L, x, rng, d) {
     const px = x + Math.floor(gap / 2) - 1;
     L.plat(px, px + 1, 10);
     L.coin(px, 8);
-    if (rng() < d * 0.5) L.enemy(airEnemyType(rng, d), px, 6, { rangeX: 2 * TS });
+    if (rng() < d * 0.5) L.enemy(airEnemyType(rng, d, L.world), px, 6, { rangeX: 2 * TS });
   } else if (rng() < 0.5) {
     L.coin(x + Math.floor(gap / 2), 9);
   }
@@ -441,7 +464,7 @@ function segLadder(L, x, rng, d, state) {
   if (!state.gem && rng() < 0.7) { L.gem(x + 7, 4); state.gem = true; }
   else L.coin(x + 7, 4);
   L.plat(x + 10, x + 11, 9);
-  if (rng() < 0.3 + d * 0.5) L.enemy(airEnemyType(rng, d), x + 5, 5, { rangeX: 2 * TS });
+  if (rng() < 0.3 + d * 0.5) L.enemy(airEnemyType(rng, d, L.world), x + 5, 5, { rangeX: 2 * TS });
   for (let wx = x; wx < x + 13; wx++) { L.water(wx, 13); L.water(wx, 14); }
   return x + 13;
 }
@@ -467,7 +490,7 @@ function segHill(L, x, rng, d) {
   L.block(sx + 1, 11); L.block(sx + 1, 10);
   L.block(sx + 2, 11); L.block(sx + 2, 10); L.block(sx + 2, 9);
   L.coins(sx, sx + 2, 7);
-  if (rng() < 0.4 + d * 0.5) L.enemy(groundEnemyType(rng, d), x + len - 3, 11);
+  if (rng() < 0.4 + d * 0.5) L.enemy(groundEnemyType(rng, d, L.world), x + len - 3, 11);
   if (rng() < 0.4) L.deco(x + len - 2, 11, DECOS[L.theme][ri(rng, 0, DECOS[L.theme].length - 1)]);
   return x + len;
 }
@@ -481,7 +504,7 @@ function segPlateau(L, x, rng, d, state) {
   L.coins(x + 8, x + 8 + Math.min(3, len - 3), 5);
   const enemyN = rng() < 0.5 + d * 0.5 ? (rng() < d * 0.5 ? 2 : 1) : 0;
   for (let i = 0; i < enemyN; i++) {
-    L.enemy(groundEnemyType(rng, d), x + 9 + Math.floor(rng() * (len - 4)), 6);
+    L.enemy(groundEnemyType(rng, d, L.world), x + 9 + Math.floor(rng() * (len - 4)), 6);
   }
   if (rng() < 0.35) L.qbox(x + 8 + ri(rng, 1, len - 3), 3);
   if (!state.gem && rng() < 0.35) { L.gem(x + 7 + Math.floor(len / 2), 2); state.gem = true; }
@@ -490,11 +513,12 @@ function segPlateau(L, x, rng, d, state) {
 
 function buildGeneratedLevel(stage) {
   const rng = mulberry32(stage * 1013904223 + 5);
-  const d = Math.min(1, (stage - 3) / 40);          // 난이도 0(4스테이지)→1(43+)
-  const themes = ['green', 'desert', 'mountain'];
-  const theme = themes[(stage - 1) % 3];
+  const world = Math.min(WORLDS.length - 1, Math.floor((stage - 1) / 10));
+  const d = Math.max(0, Math.min(1, (stage - 2) / 45)); // 난이도 0(2스테이지)→1(47+)
+  const theme = WORLDS[world].theme;
   const width = Math.min(150 + stage * 2, 250);
   const L = new LevelBuilder(width, 15, theme);
+  L.world = world;
   const state = { gem: false };
 
   // 시작 안전 지대
@@ -521,20 +545,37 @@ function buildGeneratedLevel(stage) {
     else { x = segFlat(L, x, rng, d); }
   }
 
+  // 열쇠 구간 (W4부터): 발판 위 열쇠 → 골인 앞 자물쇠 게이트
+  if (world >= 3) {
+    L.ground(x, x + 7, 12);
+    L.plat(x + 2, x + 3, 10);
+    L.plat(x + 4, x + 5, 8);
+    L.key(x + 5, 6);
+    x += 8;
+  }
+
   // 골인 구간
   L.ground(x, width - 1, 12);
   if (!state.gem) L.gem(x + 2, 9);
   L.coins(width - 12, width - 9, 9);
   if (d > 0.3) L.enemy('slime', width - 10, 11);
-  L.deco(width - 7, 11, DECOS[theme][0]);
+  L.deco(width - 9, 11, DECOS[theme][0]);
+  if (world >= 3) {
+    // 자물쇠 게이트: 점프로 넘을 수 없는 높이
+    for (let y = 3; y <= 11; y++) L.lock(width - 7, y);
+  }
   L.door(width - 4, 11);
   return L;
 }
 
+// 스테이지 배열: 수제 레벨이 각 월드의 오프닝 (1, 11, 21), 나머지는 절차 생성
 const STAGE_COUNT = 50;
-const LEVELS = [buildLevel1, buildLevel2, buildLevel3];
-for (let s = 4; s <= STAGE_COUNT; s++) {
-  LEVELS.push(buildGeneratedLevel.bind(null, s));
+const LEVELS = [];
+for (let s = 1; s <= STAGE_COUNT; s++) {
+  if (s === 1) LEVELS.push(buildLevel1);
+  else if (s === 11) LEVELS.push(buildLevel2);
+  else if (s === 21) LEVELS.push(buildLevel3);
+  else LEVELS.push(buildGeneratedLevel.bind(null, s));
 }
 
 // ---------- 게임 상태 ----------
@@ -548,6 +589,7 @@ const game = {
   stateTime: 0,
   levelTime: 0,         // 각 레벨 클리어 시간
   totalScore: 0,        // 총 스코어
+  bannerT: 0,           // 월드 시작 배너 표시 시간
 };
 
 let level = null;
@@ -556,7 +598,7 @@ let enemies = [];
 let particles = [];
 let popups = [];        // 상자에서 튀어나오는 코인 연출
 
-function isSolid(c) { return c === '#' || c === 'X' || c === '!' || c === 'x' || c === 'B'; }
+function isSolid(c) { return c === '#' || c === 'X' || c === '!' || c === 'x' || c === 'B' || c === 'L'; }
 function cellAt(tx, ty) {
   if (ty < 0 || tx < 0 || tx >= level.w || ty >= level.h) return ' ';
   return level.grid[ty][tx];
@@ -584,6 +626,7 @@ function loadLevel(idx) {
     shieldHealth: 0,                 // 방어막 (1 = 활성, 0 = 비활성)
     shieldTimer: 0,
     noCut: 0,                        // 버섯 발판 직후 가변 점프 컷 방지 타이머
+    hasKey: false,                   // 열쇠 보유 (W4+ 자물쇠 게이트용)
   };
   enemies = level.entities.map(e => {
     const box = ENEMY_BOX[e.type];
@@ -602,6 +645,7 @@ function loadLevel(idx) {
   });
   particles = [];
   popups = [];
+  if (idx % 10 === 0) game.bannerT = 3;   // 월드 시작 배너
 }
 
 function startGame() {
@@ -740,6 +784,7 @@ function update(dt) {
   if (game.state !== 'play') return;
   game.time += dt;
   game.levelTime += dt;
+  game.bannerT = Math.max(0, game.bannerT - dt);
 
   // --- 플레이어 ---
   const p = player;
@@ -747,10 +792,11 @@ function update(dt) {
   let target = 0;
   if (left) { target = -MOVE; p.flip = true; }
   if (right) { target = MOVE; p.flip = false; }
-  const accel = p.onGround ? 900 : 600;
+  const ice = THEMES[level.theme].ice;   // 설원: 미끄러운 바닥
+  const accel = p.onGround ? (ice ? 480 : 900) : 600;
   if (target > p.vx) p.vx = Math.min(target, p.vx + accel * dt);
   else if (target < p.vx) p.vx = Math.max(target, p.vx - accel * dt);
-  else if (p.onGround) p.vx *= Math.pow(0.0001, dt);
+  else if (p.onGround) p.vx *= Math.pow(ice ? 0.03 : 0.0001, dt);
 
   p.vy = Math.min(p.vy + GRAV * dt, MAX_FALL);
   p.coyote = p.onGround ? 0.1 : Math.max(0, p.coyote - dt);
@@ -810,6 +856,15 @@ function update(dt) {
       level.grid[ty][tx] = ' '; p.doubleJumpsLeft++;
       play('coin', 0.5);
       spawnBurst(tx * TS + 9, ty * TS + 9, '#ffad28');
+    } else if (c === 'H') {
+      level.grid[ty][tx] = ' ';
+      if (game.hearts < 3) game.hearts++;
+      play('gem', 0.5);
+      spawnBurst(tx * TS + 9, ty * TS + 9, '#e2554d');
+    } else if (c === 'K') {
+      level.grid[ty][tx] = ' '; p.hasKey = true;
+      play('gem', 0.6);
+      spawnBurst(tx * TS + 9, ty * TS + 9, '#ffd93b');
     } else if (c === '^') {
       // 가시: 타일 하단부와 겹칠 때만 피해 (스치듯 지나가는 억울한 판정 방지)
       const sb = { x: tx * TS + 2, y: ty * TS + 8, w: 14, h: 10 };
@@ -817,6 +872,23 @@ function update(dt) {
     } else if (c === 'd') {
       game.state = 'clear'; game.stateTime = 0;
       play('win', 0.6);
+    }
+  }
+
+  // --- 자물쇠 해제 (열쇠 보유 상태로 게이트에 접촉) ---
+  if (p.hasKey) {
+    let touching = false;
+    for (let ty = py0 - 1; ty <= py1 + 1 && !touching; ty++)
+      for (let tx = px0 - 1; tx <= px1 + 1; tx++)
+        if (cellAt(tx, ty) === 'L') { touching = true; break; }
+    if (touching) {
+      p.hasKey = false;
+      play('boxhit', 0.6);
+      for (let ty = 0; ty < level.h; ty++) for (let tx = 0; tx < level.w; tx++)
+        if (level.grid[ty][tx] === 'L') {
+          level.grid[ty][tx] = ' ';
+          spawnBurst(tx * TS + 9, ty * TS + 9, '#ffd93b');
+        }
     }
   }
 
@@ -865,10 +937,13 @@ function update(dt) {
 }
 
 // ---------- 렌더링 ----------
+// bg.png는 24px 8컬럼(0~7): 0~1 설원, 2~3 연한 숲, 4~5 사막 언덕, 6~7 초원 숲
 const THEMES = {
   green:  { skyTop: '#bdefff', skyBot: '#e3f8ff', bgCol: 6, topSet: T.TOP_GRASS },
   desert: { skyTop: '#ffe6b3', skyBot: '#fff4d6', bgCol: 4, topSet: T.TOP_SAND },
-  mountain: { skyTop: '#8ba5d9', skyBot: '#c5d9f1', bgCol: 8, topSet: T.TOP_SNOW },
+  snow:   { skyTop: '#8ba5d9', skyBot: '#c5d9f1', bgCol: 0, topSet: T.TOP_SNOW, ice: true },
+  rock:   { skyTop: '#c98a7a', skyBot: '#f2cfa8', bgCol: 4, topSet: T.TOP_ROCK },
+  night:  { skyTop: '#1d2447', skyBot: '#40518c', bgCol: 6, topSet: T.TOP_GRASS2, night: true },
 };
 
 let camX = 0;
@@ -887,6 +962,18 @@ function render() {
   g.addColorStop(0, theme.skyTop); g.addColorStop(1, theme.skyBot);
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+
+  // 밤 테마: 별 (반짝임)
+  if (theme.night) {
+    for (let i = 0; i < 40; i++) {
+      const sx = (i * 97 + 31) % VIEW_W, sy = (i * 61 + 13) % 120;
+      ctx.globalAlpha = 0.35 + 0.6 * Math.abs(Math.sin(game.time * 1.5 + i * 1.7));
+      ctx.fillStyle = '#dfe8ff';
+      const sz = i % 7 === 0 ? 2 : 1;
+      ctx.fillRect(sx, sy, sz, sz);
+    }
+    ctx.globalAlpha = 1;
+  }
 
   // 카메라
   const targetX = player.x + player.w / 2 - VIEW_W / 2;
@@ -978,6 +1065,9 @@ function render() {
           break;
         }
         case 'w': drawTile(cellAt(tx, ty - 1) === 'w' ? T.WATER : T.WATER_TOP, x, y); break;
+        case 'K': drawTile(T.KEY, x, y + Math.sin(game.time * 3 + tx) * 2); break;
+        case 'L': drawTile(T.LOCK, x, y); break;
+        case 'H': drawTile(T.HEART_FULL, x, y + Math.sin(game.time * 3 + tx) * 2); break;
         case 'd':
           drawTile(T.DOOR_TOP, x, y - TS);
           drawTile(T.DOOR_BOT, x, y);
@@ -1087,11 +1177,28 @@ function renderHUD() {
     ctx.fillText('SH:' + player.shieldHealth, 8, 80);
   }
 
+  // 열쇠 보유 표시
+  if (player.hasKey) drawTile(T.KEY, VIEW_W - 26, 26);
+
+  const w = worldOf(game.levelIdx);
   ctx.font = 'bold 10px "Courier New", monospace';
-  ctx.fillStyle = '#26314e';
+  ctx.fillStyle = THEMES[level.theme].night ? '#e8eeff' : '#26314e';
   ctx.textAlign = 'right';
-  ctx.fillText('LEVEL ' + (game.levelIdx + 1) + '/' + LEVELS.length, VIEW_W - 8, 18);
+  ctx.fillText('W' + (w + 1) + ' ' + WORLDS[w].name + '  ' + (game.levelIdx + 1) + '/' + LEVELS.length, VIEW_W - 8, 18);
   ctx.textAlign = 'left';
+
+  // 월드 시작 배너
+  if (game.bannerT > 0) {
+    ctx.globalAlpha = Math.min(1, game.bannerT);
+    ctx.fillStyle = 'rgba(20, 24, 46, 0.6)';
+    ctx.fillRect(VIEW_W / 2 - 95, 40, 190, 26);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#ffd93b';
+    ctx.font = 'bold 14px "Courier New", monospace';
+    ctx.fillText('WORLD ' + (w + 1) + ' · ' + WORLDS[w].name, VIEW_W / 2, 58);
+    ctx.textAlign = 'left';
+    ctx.globalAlpha = 1;
+  }
 }
 
 function renderOverlay(title, sub) {
