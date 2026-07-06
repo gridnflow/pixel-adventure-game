@@ -1,7 +1,7 @@
-// 전체 스테이지 정합성 검사 (브라우저 불필요)
-// 실행: node tools/test-levels.js
-// 검사: ① 문(d) 존재 ② 스폰 지점 아래 지면 ③ 발 디딜 곳 없는 연속 구덩이 폭
-//       (생성 스테이지는 ≤3 이어야 함. 수제 스테이지 3의 gap run 7은 더블 점프 설계라 예외)
+// Consistency check for all stages (no browser needed)
+// Run: node tools/test-levels.js
+// Checks: (1) door (d) exists (2) ground below spawn point (3) width of consecutive gaps with no footing
+//       (generated stages must be ≤3; handcrafted stage 3's gap run of 7 is exempt as a double-jump design)
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
@@ -24,7 +24,7 @@ sandbox.globalThis = sandbox;
 const context = vm.createContext(sandbox);
 vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'game.js'), 'utf8'), context);
 
-// 수제 레벨의 의도된 예외: 스테이지 21(수제 설원 레벨)은 더블 점프 전제의 7타일 구덩이가 있음
+// Intended handcrafted-level exception: stage 21 (handcrafted snowfield level) has a 7-tile pit that assumes double jump
 const GAP_EXCEPTIONS = { 21: 7 };
 
 const result = vm.runInContext(`
@@ -52,7 +52,7 @@ const result = vm.runInContext(`
       maxRun = Math.max(maxRun, run);
     }
     maxRuns.push(maxRun);
-    // 열쇠/자물쇠 (W4+, 스테이지 31부터): 열쇠가 있고 자물쇠보다 앞(왼쪽)에 있어야 함
+    // Key/lock (W4+, from stage 31): a key must exist and sit before (left of) the lock
     if (stage >= 31) {
       let keyX = -1, lockX = -1;
       for (let y = 0; y < L.h; y++) for (let x = 0; x < L.w; x++) {

@@ -1,17 +1,17 @@
 'use strict';
 // ============================================================
-// Pixel Adventure — Kenney Pixel Platformer 에셋 기반 플랫포머
-// 조작: ←→/A D 이동, Space/↑/W 점프, Enter 시작, R 재시작
+// Pixel Adventure — a platformer built on Kenney Pixel Platformer assets
+// Controls: ←→/A D move, Space/↑/W jump, Enter start, R restart
 // ============================================================
 
-const TS = 18;            // 타일 크기(px)
+const TS = 18;            // tile size (px)
 const VIEW_W = 480, VIEW_H = 270;
 
 const cvs = document.getElementById('game');
 const ctx = cvs.getContext('2d');
 ctx.imageSmoothingEnabled = false;
 
-// ---------- 에셋 로드 ----------
+// ---------- Asset loading ----------
 const IMG = {};
 function loadImage(name, src) {
   return new Promise(res => {
@@ -34,15 +34,15 @@ function play(name, vol = 0.5) {
   a.play().catch(() => {});
 }
 
-// ---------- 스프라이트 인덱스 (tilemap_packed.png, 20열) ----------
+// ---------- Sprite indices (tilemap_packed.png, 20 columns) ----------
 const T = {
-  // 지형 세트: [단독, 왼쪽 캡, 중앙, 오른쪽 캡]
+  // terrain sets: [single, left cap, middle, right cap]
   TOP_GRASS: [20, 21, 22, 23],
   TOP_SAND: [60, 61, 62, 63],
   TOP_SNOW: [80, 81, 82, 83],
   TOP_ROCK: [40, 41, 42, 43],
   TOP_GRASS2: [0, 1, 2, 3],
-  DIRT: [4, 5, 24, 25],       // 테두리 없는 순수 흙 (샘플 이미지 기준)
+  DIRT: [4, 5, 24, 25],       // pure dirt without edges (per sample image)
   PLAT: 146,
   CRATE: 26,
   QBOX: 10, QBOX_USED: 29,
@@ -54,30 +54,30 @@ const T = {
   TREE: 126, CACTUS: 127, MUSHROOM: 128,
   CLOUD: [153, 154, 155],
   DIGIT0: 160,
-  POWERUP_SHIELD: 156,      // 방어막 파워업
-  POWERUP_DOUBLE: 157,      // 더블 점프 파워업 (추가용)
-  SPIKES: 68,               // 가시 (밟으면 피해)
-  BOUNCE: [15, 12, 13, 14], // 빨간 버섯 발판 [단독, 왼, 중, 오] — 밟으면 슈퍼 점프
-  WATER_TOP: 33, WATER: 53, // 구덩이 물 (장식)
-  KEY: 27, LOCK: 28,        // 열쇠 & 자물쇠 문 (황야 월드부터)
-  // 장식 타일
+  POWERUP_SHIELD: 156,      // shield power-up
+  POWERUP_DOUBLE: 157,      // double jump power-up (extra)
+  SPIKES: 68,               // spikes (damage on contact)
+  BOUNCE: [15, 12, 13, 14], // red mushroom pad [single, left, mid, right] — super jump when stepped on
+  WATER_TOP: 33, WATER: 53, // pit water (decoration)
+  KEY: 27, LOCK: 28,        // key & lock gate (from Badlands world)
+  // decoration tiles
   FENCE: 147, BENCH: 146, SNOWMAN: 145, SNOWPILE: 148,
   SPROUT: 124, SPROUT2: 125, FLOWER: 144, TRUNK: 137, FENCE_GATE: 106,
 };
-// 장식 그리드 기호 → 타일 매핑 (전부 비충돌)
+// deco grid symbol → tile mapping (all non-colliding)
 const DECO_TILES = {
   s: T.SIGN_R, t: T.TREE, c: T.CACTUS, m: T.MUSHROOM,
   f: T.FENCE, n: T.SNOWMAN, r: T.SNOWPILE,
   g: T.SPROUT, h: T.SPROUT2, l: T.FLOWER, k: T.TRUNK, u: T.FENCE_GATE,
 };
-// 캐릭터 (tilemap-characters_packed.png, 24px, 9열)
+// Characters (tilemap-characters_packed.png, 24px, 9 columns)
 const CH = {
   PLAYER: [0, 1],
   SLIME: [18, 19],
   FLY: [24, 25],
   SAW: 8,
-  WALKER: [9, 10],   // 빠른 지상 순찰자
-  BEE: [13, 14],     // 빠른 비행 적
+  WALKER: [9, 10],   // fast ground patroller
+  BEE: [13, 14],     // fast flying enemy
 };
 
 function drawTile(idx, x, y) {
@@ -97,12 +97,12 @@ function drawChar(idx, x, y, flip) {
     ctx.drawImage(IMG.chars, sx, sy, 24, 24, x, y, 24, 24);
   }
 }
-// 적: 물리 박스 하단 중앙에 24px 스프라이트 정렬
+// Enemies: align the 24px sprite to the bottom center of the physics box
 function drawEnemy(e, idx, flip, yOff = 0) {
   drawChar(idx, e.x + e.w / 2 - 12, e.y + e.h - 24 + yOff, flip);
 }
 
-// ---------- 레벨 빌더 ----------
+// ---------- Level builder ----------
 class LevelBuilder {
   constructor(w, h, theme) {
     this.w = w; this.h = h; this.theme = theme;
@@ -132,24 +132,24 @@ class LevelBuilder {
   enemy(type, x, y, opt) { this.entities.push(Object.assign({ type, tx: x, ty: y }, opt || {})); }
 }
 
-// 레벨 1: 초원
+// Level 1: Grassland
 function buildLevel1() {
   const L = new LevelBuilder(140, 15, 'green');
   L.spawn(3, 9);
   L.ground(0, 16, 12);
-  L.deco(5, 11, 's');           // 안내판
-  L.deco(7, 11, 'g');           // 새싹
-  L.deco(9, 11, 't');           // 나무
-  L.deco(14, 11, 'l');          // 꽃
+  L.deco(5, 11, 's');           // signpost
+  L.deco(7, 11, 'g');           // sprout
+  L.deco(9, 11, 't');           // tree
+  L.deco(14, 11, 'l');          // flower
   L.coins(11, 13, 10);
-  // 첫 구덩이 (17~18)
+  // first pit (17~18)
   L.ground(19, 32, 12);
   L.qbox(22, 8);
   L.coins(24, 26, 10);
   L.deco(29, 11, 'h');
   L.enemy('slime', 27, 11);
   L.crate(30, 11); L.crate(31, 11); L.crate(31, 10);
-  // 발판 구간 (구덩이 33~36)
+  // platform section (pit 33~36)
   L.plat(34, 35, 10);
   L.coin(34, 8); L.coin(35, 8);
   L.ground(37, 52, 11);
@@ -158,18 +158,18 @@ function buildLevel1() {
   L.coins(42, 46, 8);
   L.enemy('slime', 47, 10);
   L.deco(51, 10, 't');
-  // 발판 (구덩이 53~56) → 아래 지대
+  // platforms (pit 53~56) → lower area
   L.plat(54, 55, 9);
   L.ground(57, 72, 12);
   L.enemy('fly', 58, 7, { rangeX: 1 * TS });
-  // 보석 계단 발판
+  // gem stair platforms
   L.plat(60, 61, 10);
   L.plat(63, 64, 8);
   L.plat(66, 68, 6);
   L.gem(67, 4);
   L.enemy('saw', 66, 11);
   L.deco(71, 11, 'c');
-  // 계단 언덕 (구덩이 73~74)
+  // stair hill (pit 73~74)
   L.ground(75, 95, 12);
   L.block(81, 11); L.block(82, 11);
   L.block(83, 11); L.block(83, 10); L.block(84, 11); L.block(84, 10);
@@ -177,14 +177,14 @@ function buildLevel1() {
   L.block(86, 11); L.block(86, 10); L.block(86, 9);
   L.coin(81, 9); L.coin(83, 8); L.coin(85, 7);
   L.enemy('slime', 91, 11);
-  // 발판 다리 (구덩이 96~99)
+  // platform bridge (pit 96~99)
   L.plat(97, 98, 10);
   L.ground(100, 118, 12);
   L.qbox(104, 8); L.qbox(106, 8);
   L.coin(105, 10);
   L.enemy('fly', 111, 7, { rangeX: 3 * TS });
   L.coins(109, 113, 10);
-  // 마지막 구간 (구덩이 119~122)
+  // final section (pit 119~122)
   L.plat(120, 121, 10);
   L.ground(123, 139, 12);
   L.deco(126, 11, 't');
@@ -195,7 +195,7 @@ function buildLevel1() {
   return L;
 }
 
-// 레벨 2: 사막
+// Level 2: Desert
 function buildLevel2() {
   const L = new LevelBuilder(150, 15, 'desert');
   L.spawn(2, 9);
@@ -203,24 +203,24 @@ function buildLevel2() {
   L.deco(4, 11, 's');
   L.deco(6, 11, 'u');
   L.deco(8, 11, 'c');
-  // 크레이트 언덕 (구덩이 13~14)
+  // crate hill (pit 13~14)
   L.ground(15, 28, 12);
   L.crate(19, 11); L.crate(20, 11); L.crate(20, 10);
   L.coins(17, 21, 8);
   L.deco(22, 11, 'k');
   L.enemy('saw', 24, 11);
-  // 발판 사다리 상승 (구덩이 29~38)
+  // platform ladder climb (pit 29~38)
   L.plat(30, 31, 10);
   L.plat(33, 34, 8);
   L.plat(36, 37, 6);
   L.coin(30, 8); L.coin(33, 6); L.coin(36, 4);
-  // 높은 지대
+  // high ground
   L.ground(39, 55, 7);
   L.enemy('slime', 44, 6);
   L.qbox(48, 3);
   L.coins(46, 50, 5);
   L.enemy('slime', 52, 6);
-  // 낙하 + 아래 지대 (구덩이 56~57)
+  // drop + lower area (pit 56~57)
   L.ground(58, 74, 12);
   L.coins(59, 61, 9);
   L.deco(63, 11, 'u');
@@ -228,12 +228,12 @@ function buildLevel2() {
   L.deco(68, 11, 'c');
   L.deco(71, 11, 'k');
   L.enemy('fly', 70, 8, { rangeX: 3 * TS });
-  // 징검다리 (구덩이 75~76, 80~81, 85~86, 90~91)
+  // stepping stones (pits 75~76, 80~81, 85~86, 90~91)
   L.ground(77, 79, 12);
   L.ground(82, 84, 12);
   L.ground(87, 89, 12);
   L.coin(78, 9); L.coin(83, 9); L.coin(88, 9);
-  // 보석 도전
+  // gem challenge
   L.ground(92, 110, 12);
   L.plat(95, 96, 10);
   L.plat(98, 99, 8);
@@ -241,14 +241,14 @@ function buildLevel2() {
   L.enemy('saw', 102, 11);
   L.enemy('slime', 106, 11);
   L.qbox(104, 8);
-  // 상승 계단 (구덩이 111~112)
+  // ascending stairs (pit 111~112)
   L.ground(113, 128, 12);
   L.block(117, 11); L.block(118, 11);
   L.block(119, 11); L.block(119, 10);
   L.block(120, 11); L.block(120, 10); L.block(120, 9);
   L.coins(116, 120, 7);
   L.enemy('slime', 124, 11);
-  // 골인 (구덩이 129~132)
+  // goal (pit 129~132)
   L.plat(130, 131, 10);
   L.ground(133, 149, 12);
   L.deco(135, 11, 'u');
@@ -259,7 +259,7 @@ function buildLevel2() {
   return L;
 }
 
-// 레벨 3: 설원 (고급 도전, 월드 3 오프닝)
+// Level 3: Snowfield (advanced challenge, World 3 opener)
 function buildLevel3() {
   const L = new LevelBuilder(160, 15, 'snow');
   L.spawn(2, 10);
@@ -270,16 +270,16 @@ function buildLevel3() {
   L.deco(13, 11, 'f');
   L.coins(12, 14, 10);
 
-  // 높은 절벽 도전 (구덩이 16~20)
+  // high cliff challenge (pit 16~20)
   L.plat(21, 22, 8);
   L.plat(24, 25, 6);
   L.plat(27, 28, 4);
   L.coin(21, 6); L.coin(24, 4); L.coin(27, 2);
   L.gem(27, 1);
-  L.powerup(25, 7, 'double');       // 더블 점프 파워업
+  L.powerup(25, 7, 'double');       // double jump power-up
   L.enemy('fly', 23, 3, { rangeX: 2 * TS });
 
-  // 넓은 평지 + 톱니 회피
+  // wide flat + saw dodging
   L.ground(30, 50, 12);
   L.deco(32, 11, 'r');
   L.enemy('saw', 35, 11);
@@ -289,21 +289,21 @@ function buildLevel3() {
   L.qbox(48, 9);
   L.deco(49, 11, 'k');
 
-  // 좁은 발판 구간 (구덩이 51~57)
+  // narrow platform section (pit 51~57)
   L.ground(58, 65, 12);
   L.plat(60, 61, 10);
   L.plat(63, 64, 8);
   L.coin(60, 8); L.coin(63, 6);
   L.enemy('fly', 62, 6, { rangeX: 3 * TS });
 
-  // 계단 상승
+  // stair climb
   L.block(67, 11); L.block(68, 11);
   L.block(69, 11); L.block(69, 10);
   L.block(70, 11); L.block(70, 10); L.block(70, 9);
   L.block(71, 11); L.block(71, 10); L.block(71, 9); L.block(71, 8);
   L.coins(67, 71, 6);
 
-  // 높은 지대 + 어려운 적들
+  // high ground + tougher enemies
   L.ground(73, 95, 6);
   L.enemy('saw', 80, 5);
   L.enemy('slime', 88, 5);
@@ -311,16 +311,16 @@ function buildLevel3() {
   L.coins(76, 80, 4);
   L.coins(90, 93, 4);
   L.gem(88, 2);
-  L.powerup(82, 4, 'shield');       // 방어막 파워업
+  L.powerup(82, 4, 'shield');       // shield power-up
 
-  // 하강 발판
+  // descending platforms
   L.plat(97, 98, 9);
   L.plat(100, 101, 8);
   L.plat(103, 104, 7);
   L.coin(97, 7); L.coin(100, 6); L.coin(103, 5);
   L.enemy('fly', 101, 6, { rangeX: 2 * TS });
 
-  // 낙하 존 + 최종 구간
+  // drop zone + final section
   L.ground(106, 125, 12);
   L.deco(108, 11, 'r');
   L.deco(110, 11, 'k');
@@ -329,7 +329,7 @@ function buildLevel3() {
   L.deco(118, 11, 'n');
   L.enemy('slime', 122, 11);
 
-  // 최종 도전 (구덩이 126~129)
+  // final challenge (pit 126~129)
   L.plat(130, 131, 10);
   L.ground(133, 159, 12);
   L.deco(136, 11, 'n');
@@ -344,8 +344,8 @@ function buildLevel3() {
   return L;
 }
 
-// ---------- 절차 생성 레벨 (스테이지 4~50) ----------
-// 시드 고정 난수: 같은 스테이지는 항상 같은 지형
+// ---------- Procedurally generated levels (stages 4~50) ----------
+// Seeded RNG: the same stage always gets the same terrain
 function mulberry32(seed) {
   let a = seed >>> 0;
   return function () {
@@ -357,16 +357,16 @@ function mulberry32(seed) {
 }
 function ri(rng, min, max) { return min + Math.floor(rng() * (max - min + 1)); }
 
-// ---------- 월드 구성 (10스테이지 = 1월드) ----------
-// 월드마다 테마·기믹·아이템이 순차 해금된다:
-//   W1 초원: 기본 + 버섯 발판 / W2 사막: 가시·워커 / W3 설원: 벌·하트(미끄러운 바닥)
-//   W4 황야: 열쇠+자물쇠 문 / W5 밤의 숲: 전부 조합
+// ---------- World layout (10 stages = 1 world) ----------
+// Each world unlocks themes, gimmicks, and items in sequence:
+//   W1 Grassland: basics + mushroom pads / W2 Desert: spikes & walkers / W3 Snowfield: bees & hearts (slippery ground)
+//   W4 Badlands: key + lock gate / W5 Night Forest: everything combined
 const WORLDS = [
-  { name: '초원',    theme: 'green' },
-  { name: '사막',    theme: 'desert' },
-  { name: '설원',    theme: 'snow' },
-  { name: '황야',    theme: 'rock' },
-  { name: '밤의 숲', theme: 'night' },
+  { name: 'Grassland',    theme: 'green' },
+  { name: 'Desert',       theme: 'desert' },
+  { name: 'Snowfield',    theme: 'snow' },
+  { name: 'Badlands',     theme: 'rock' },
+  { name: 'Night Forest', theme: 'night' },
 ];
 function worldOf(levelIdx) { return Math.min(WORLDS.length - 1, Math.floor(levelIdx / 10)); }
 
@@ -378,19 +378,19 @@ const DECOS = {
   night:  ['t', 'm', 'g', 'l', 't', 'h'],
 };
 
-// 지상 적 풀: 워커는 W2부터, 난이도에 따라 슬라임 → 워커/톱니 비율 상승
+// Ground enemy pool: walkers from W2; slime → walker/saw ratio rises with difficulty
 function groundEnemyType(rng, d, world) {
   const r = rng();
   if (r < 0.18 + d * 0.32) return 'saw';
   if (world >= 1 && r > 0.75 - d * 0.15) return 'walker';
   return 'slime';
 }
-// 비행 적 풀: 벌은 W3부터
+// Air enemy pool: bees from W3
 function airEnemyType(rng, d, world) {
   return world >= 2 && rng() < 0.3 + d * 0.4 ? 'bee' : 'fly';
 }
 
-// 평지: 코인/적/가시/상자/장식 배치. 항상 지면으로 끝남
+// Flat: places coins/enemies/spikes/boxes/deco. Always ends on ground
 function segFlat(L, x, rng, d) {
   const len = ri(rng, 9, 14);
   L.ground(x, x + len - 1, 12);
@@ -402,14 +402,14 @@ function segFlat(L, x, rng, d) {
   for (let i = 0; i < enemyN; i++) {
     L.enemy(groundEnemyType(rng, d, L.world), x + 3 + Math.floor(rng() * (len - 5)), 11);
   }
-  // 가시 (W2부터): 순찰 적이 없는 평지에만, 위에 코인으로 점프 유도
+  // Spikes (from W2): only on flats without patrolling enemies; a coin above invites a jump
   if (L.world >= 1 && enemyN === 0 && rng() < 0.25 + d * 0.4) {
     const sx = x + ri(rng, 3, len - 4);
     L.spike(sx, 11);
     if (rng() < 0.3 + d * 0.4) L.spike(sx + 1, 11);
     L.coin(sx, 8);
   }
-  // 하트 회복 아이템 (W3부터)
+  // heart recovery item (from W3)
   if (L.world >= 2 && rng() < 0.07) L.heart(x + ri(rng, 2, len - 3), 8);
   if (rng() < 0.3) L.qbox(x + ri(rng, 2, len - 3), 8);
   if (rng() < 0.25) {
@@ -424,7 +424,7 @@ function segFlat(L, x, rng, d) {
   return x + len;
 }
 
-// 구덩이: 바닥에 물(장식), 넓으면 중간 발판 제공. 다음 세그먼트는 반드시 지면
+// Pit: water at the bottom (deco); wide pits get a mid platform. Next segment must be ground
 function segPit(L, x, rng, d) {
   const gap = ri(rng, 2, 3 + Math.round(d * 2));   // 2~5
   if (gap >= 4) {
@@ -439,7 +439,7 @@ function segPit(L, x, rng, d) {
   return x + gap;
 }
 
-// 징검다리 섬들 (사이사이 물)
+// Stepping-stone islands (water in between)
 function segStones(L, x, rng, d) {
   const n = ri(rng, 2, 3);
   for (let i = 0; i < n; i++) {
@@ -455,7 +455,7 @@ function segStones(L, x, rng, d) {
   return x;
 }
 
-// 구덩이 위 발판 사다리 (보석 도전). 다음 세그먼트는 반드시 지면
+// Platform ladder over a pit (gem challenge). Next segment must be ground
 function segLadder(L, x, rng, d, state) {
   L.plat(x + 1, x + 2, 10);
   L.plat(x + 4, x + 5, 8);
@@ -469,7 +469,7 @@ function segLadder(L, x, rng, d, state) {
   return x + 13;
 }
 
-// 구덩이 + 버섯 발판: 빠지면 슈퍼 점프로 탈출, 높은 곳에 보상. 다음은 반드시 지면
+// Pit + mushroom pads: fall in and super-jump out, rewards up high. Next must be ground
 function segBounce(L, x, rng, d, state) {
   const gap = ri(rng, 4, 6);
   const bx = x + Math.floor(gap / 2) - 1;
@@ -481,7 +481,7 @@ function segBounce(L, x, rng, d, state) {
   return x + gap;
 }
 
-// 계단 언덕
+// Stair hill
 function segHill(L, x, rng, d) {
   const len = ri(rng, 10, 14);
   L.ground(x, x + len - 1, 12);
@@ -495,7 +495,7 @@ function segHill(L, x, rng, d) {
   return x + len;
 }
 
-// 높은 지대: 발판으로 상승 → 고지대 → 오른쪽 끝에서 낙하. 다음은 반드시 지면
+// Plateau: climb platforms → high ground → drop off the right edge. Next must be ground
 function segPlateau(L, x, rng, d, state) {
   L.plat(x + 1, x + 2, 10);
   L.plat(x + 4, x + 5, 8);
@@ -514,21 +514,21 @@ function segPlateau(L, x, rng, d, state) {
 function buildGeneratedLevel(stage) {
   const rng = mulberry32(stage * 1013904223 + 5);
   const world = Math.min(WORLDS.length - 1, Math.floor((stage - 1) / 10));
-  const d = Math.max(0, Math.min(1, (stage - 2) / 45)); // 난이도 0(2스테이지)→1(47+)
+  const d = Math.max(0, Math.min(1, (stage - 2) / 45)); // difficulty 0 (stage 2) → 1 (47+)
   const theme = WORLDS[world].theme;
   const width = Math.min(150 + stage * 2, 250);
   const L = new LevelBuilder(width, 15, theme);
   L.world = world;
   const state = { gem: false };
 
-  // 시작 안전 지대
+  // starting safe zone
   L.spawn(3, 9);
   L.ground(0, 11, 12);
   L.deco(4, 11, 's');
   L.coins(7, 9, 10);
 
   let x = 12;
-  let needGround = false;   // 구덩이류 다음엔 반드시 지면
+  let needGround = false;   // pit-type segments must be followed by ground
   while (x < width - 26) {
     if (needGround) {
       x = segFlat(L, x, rng, d);
@@ -545,7 +545,7 @@ function buildGeneratedLevel(stage) {
     else { x = segFlat(L, x, rng, d); }
   }
 
-  // 열쇠 구간 (W4부터): 발판 위 열쇠 → 골인 앞 자물쇠 게이트
+  // Key section (from W4): key on platforms → lock gate before the goal
   if (world >= 3) {
     L.ground(x, x + 7, 12);
     L.plat(x + 2, x + 3, 10);
@@ -554,21 +554,21 @@ function buildGeneratedLevel(stage) {
     x += 8;
   }
 
-  // 골인 구간
+  // goal section
   L.ground(x, width - 1, 12);
   if (!state.gem) L.gem(x + 2, 9);
   L.coins(width - 12, width - 9, 9);
   if (d > 0.3) L.enemy('slime', width - 10, 11);
   L.deco(width - 9, 11, DECOS[theme][0]);
   if (world >= 3) {
-    // 자물쇠 게이트: 점프로 넘을 수 없는 높이
+    // lock gate: too tall to jump over
     for (let y = 3; y <= 11; y++) L.lock(width - 7, y);
   }
   L.door(width - 4, 11);
   return L;
 }
 
-// 스테이지 배열: 수제 레벨이 각 월드의 오프닝 (1, 11, 21), 나머지는 절차 생성
+// Stage list: handcrafted levels open each world (1, 11, 21), the rest are generated
 const STAGE_COUNT = 50;
 const LEVELS = [];
 for (let s = 1; s <= STAGE_COUNT; s++) {
@@ -578,7 +578,7 @@ for (let s = 1; s <= STAGE_COUNT; s++) {
   else LEVELS.push(buildGeneratedLevel.bind(null, s));
 }
 
-// ---------- 게임 상태 ----------
+// ---------- Game state ----------
 const game = {
   state: 'title',       // title | play | clear | gameover | win
   levelIdx: 0,
@@ -587,16 +587,16 @@ const game = {
   hearts: 3,
   time: 0,
   stateTime: 0,
-  levelTime: 0,         // 각 레벨 클리어 시간
-  totalScore: 0,        // 총 스코어
-  bannerT: 0,           // 월드 시작 배너 표시 시간
+  levelTime: 0,         // clear time for each level
+  totalScore: 0,        // total score
+  bannerT: 0,           // world start banner display time
 };
 
 let level = null;
 let player = null;
 let enemies = [];
 let particles = [];
-let popups = [];        // 상자에서 튀어나오는 코인 연출
+let popups = [];        // coin pop effect from boxes
 
 function isSolid(c) { return c === '#' || c === 'X' || c === '!' || c === 'x' || c === 'B' || c === 'L'; }
 function cellAt(tx, ty) {
@@ -604,7 +604,7 @@ function cellAt(tx, ty) {
   return level.grid[ty][tx];
 }
 
-// 적 물리 박스 크기 (스프라이트는 박스 하단에 정렬해 그림)
+// Enemy physics box sizes (sprites are drawn aligned to the box bottom)
 const ENEMY_BOX = {
   slime:  { w: 18, h: 14 },
   fly:    { w: 18, h: 12 },
@@ -622,18 +622,18 @@ function loadLevel(idx) {
     onGround: false, flip: false,
     coyote: 0, jumpBuf: 0,
     iframes: 0, anim: 0,
-    doubleJumpsLeft: 1,              // 더블 점프 활성화
-    shieldHealth: 0,                 // 방어막 (1 = 활성, 0 = 비활성)
+    doubleJumpsLeft: 1,              // double jump enabled
+    shieldHealth: 0,                 // shield (1 = active, 0 = inactive)
     shieldTimer: 0,
-    noCut: 0,                        // 버섯 발판 직후 가변 점프 컷 방지 타이머
-    hasKey: false,                   // 열쇠 보유 (W4+ 자물쇠 게이트용)
+    noCut: 0,                        // timer preventing variable jump cut right after a mushroom pad
+    hasKey: false,                   // holding a key (for W4+ lock gates)
   };
   enemies = level.entities.map(e => {
     const box = ENEMY_BOX[e.type];
     const base = {
       type: e.type,
       w: box.w, h: box.h,
-      x: e.tx * TS, y: (e.ty + 1) * TS - box.h,   // 타일 바닥에 발 맞춤
+      x: e.tx * TS, y: (e.ty + 1) * TS - box.h,   // feet aligned to tile floor
       vy: 0, dead: 0, anim: Math.random() * 2,
     };
     if (e.type === 'slime')  return { ...base, vx: -25 };
@@ -645,7 +645,7 @@ function loadLevel(idx) {
   });
   particles = [];
   popups = [];
-  if (idx % 10 === 0) game.bannerT = 3;   // 월드 시작 배너
+  if (idx % 10 === 0) game.bannerT = 3;   // world start banner
 }
 
 function startGame() {
@@ -656,7 +656,7 @@ function startGame() {
   play('start');
 }
 
-// ---------- 입력 ----------
+// ---------- Input ----------
 const keys = {};
 window.addEventListener('keydown', e => {
   if (['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Space'].includes(e.code)) e.preventDefault();
@@ -677,13 +677,13 @@ window.addEventListener('keydown', e => {
 window.addEventListener('keyup', e => { keys[e.code] = false; });
 
 function nextLevel() {
-  // 스코어 계산 (시간 보너스)
-  const timeBonus = Math.max(0, 300 - game.levelTime * 100); // 3초 이내 보너스
+  // score calculation (time bonus)
+  const timeBonus = Math.max(0, 300 - game.levelTime * 100); // bonus for clearing within 3 seconds
   game.totalScore += Math.round(timeBonus);
 
   game.levelIdx++;
   game.levelTime = 0;
-  game.hearts = 3;      // 스테이지 클리어 시 하트 회복 (50스테이지 완주용)
+  game.hearts = 3;      // restore hearts on stage clear (for finishing all 50 stages)
   if (game.levelIdx >= LEVELS.length) {
     game.state = 'win'; game.stateTime = 0;
     play('win', 0.7);
@@ -694,11 +694,11 @@ function nextLevel() {
   }
 }
 
-// ---------- 물리 ----------
+// ---------- Physics ----------
 const GRAV = 830, MOVE = 130, JUMP_V = 292, MAX_FALL = 320, BOUNCE_V = 460;
 
 function moveAndCollide(ent, dt, oneWay) {
-  // X축
+  // X axis
   ent.x += ent.vx * dt;
   let x0 = Math.floor(ent.x / TS), x1 = Math.floor((ent.x + ent.w - 1) / TS);
   let y0 = Math.floor(ent.y / TS), y1 = Math.floor((ent.y + ent.h - 1) / TS);
@@ -707,7 +707,7 @@ function moveAndCollide(ent, dt, oneWay) {
     if (ent.vx > 0 && isSolid(cellAt(x1, ty))) { ent.x = x1 * TS - ent.w; ent.hitWall = true; }
     else if (ent.vx < 0 && isSolid(cellAt(x0, ty))) { ent.x = (x0 + 1) * TS; ent.hitWall = true; }
   }
-  // Y축
+  // Y axis
   const prevBottom = ent.y + ent.h;
   ent.y += ent.vy * dt;
   x0 = Math.floor(ent.x / TS); x1 = Math.floor((ent.x + ent.w - 1) / TS);
@@ -718,7 +718,7 @@ function moveAndCollide(ent, dt, oneWay) {
       const c = cellAt(tx, y1);
       if (isSolid(c) || (c === '=' && prevBottom <= y1 * TS + 2)) {
         ent.y = y1 * TS - ent.h; ent.vy = 0; ent.onGround = true;
-        // 버섯 발판: 플레이어가 밟으면 슈퍼 점프
+        // mushroom pad: super jump when the player lands on it
         if (c === 'B' && ent === player) {
           ent.vy = -BOUNCE_V; ent.onGround = false; ent.noCut = 0.35;
           play('jump', 0.55);
@@ -750,7 +750,7 @@ function overlaps(a, b) {
 function hurtPlayer() {
   if (player.iframes > 0) return;
 
-  // 방어막이 있으면 방어막 손상
+  // if a shield is active, damage the shield instead
   if (player.shieldHealth > 0) {
     player.shieldHealth--;
     player.iframes = 0.5;
@@ -778,7 +778,7 @@ function spawnBurst(x, y, color) {
   }
 }
 
-// ---------- 업데이트 ----------
+// ---------- Update ----------
 function update(dt) {
   game.stateTime += dt;
   if (game.state !== 'play') return;
@@ -786,13 +786,13 @@ function update(dt) {
   game.levelTime += dt;
   game.bannerT = Math.max(0, game.bannerT - dt);
 
-  // --- 플레이어 ---
+  // --- Player ---
   const p = player;
   const left = keys.ArrowLeft || keys.KeyA, right = keys.ArrowRight || keys.KeyD;
   let target = 0;
   if (left) { target = -MOVE; p.flip = true; }
   if (right) { target = MOVE; p.flip = false; }
-  const ice = THEMES[level.theme].ice;   // 설원: 미끄러운 바닥
+  const ice = THEMES[level.theme].ice;   // snowfield: slippery ground
   const accel = p.onGround ? (ice ? 480 : 900) : 600;
   if (target > p.vx) p.vx = Math.min(target, p.vx + accel * dt);
   else if (target < p.vx) p.vx = Math.max(target, p.vx - accel * dt);
@@ -802,23 +802,23 @@ function update(dt) {
   p.coyote = p.onGround ? 0.1 : Math.max(0, p.coyote - dt);
   p.jumpBuf = Math.max(0, p.jumpBuf - dt);
 
-  // 접지 시 더블 점프 초기화
+  // reset double jump on landing
   if (p.onGround) p.doubleJumpsLeft = 1;
 
   if (p.jumpBuf > 0) {
     if (p.coyote > 0) {
-      // 일반 점프 (접지)
+      // normal jump (grounded)
       p.vy = -JUMP_V; p.jumpBuf = 0; p.coyote = 0;
       play('jump', 0.35);
     } else if (p.doubleJumpsLeft > 0) {
-      // 더블 점프 (공중)
+      // double jump (airborne)
       p.vy = -JUMP_V; p.jumpBuf = 0; p.doubleJumpsLeft--;
       play('jump', 0.35);
       spawnBurst(p.x + p.w / 2, p.y + p.h, '#ffad28');
     }
   }
 
-  // 가변 점프 (키를 떼면 낮게 뜀) — 버섯 발판 직후에는 컷 없음
+  // variable jump (release key for a shorter hop) — no cut right after a mushroom pad
   if (p.noCut <= 0 && p.vy < -120 && !(keys.Space || keys.ArrowUp || keys.KeyW)) p.vy = -120;
 
   moveAndCollide(p, dt, true);
@@ -827,7 +827,7 @@ function update(dt) {
   p.noCut = Math.max(0, p.noCut - dt);
   p.anim += dt;
 
-  // 낙사
+  // fall death
   if (p.y > level.h * TS + 40) {
     game.hearts--;
     play('hurt', 0.5);
@@ -835,7 +835,7 @@ function update(dt) {
     p.x = level.spawnX; p.y = level.spawnY; p.vx = 0; p.vy = 0; p.iframes = 1.5;
   }
 
-  // --- 수집 ---
+  // --- Collectibles ---
   const px0 = Math.floor(p.x / TS), px1 = Math.floor((p.x + p.w - 1) / TS);
   const py0 = Math.floor(p.y / TS), py1 = Math.floor((p.y + p.h - 1) / TS);
   for (let ty = py0; ty <= py1; ty++) for (let tx = px0; tx <= px1; tx++) {
@@ -866,7 +866,7 @@ function update(dt) {
       play('gem', 0.6);
       spawnBurst(tx * TS + 9, ty * TS + 9, '#ffd93b');
     } else if (c === '^') {
-      // 가시: 타일 하단부와 겹칠 때만 피해 (스치듯 지나가는 억울한 판정 방지)
+      // spikes: damage only when overlapping the lower part of the tile (avoids unfair grazing hits)
       const sb = { x: tx * TS + 2, y: ty * TS + 8, w: 14, h: 10 };
       if (overlaps(p, sb)) hurtPlayer();
     } else if (c === 'd') {
@@ -875,7 +875,7 @@ function update(dt) {
     }
   }
 
-  // --- 자물쇠 해제 (열쇠 보유 상태로 게이트에 접촉) ---
+  // --- Unlock (touch the gate while holding the key) ---
   if (p.hasKey) {
     let touching = false;
     for (let ty = py0 - 1; ty <= py1 + 1 && !touching; ty++)
@@ -892,7 +892,7 @@ function update(dt) {
     }
   }
 
-  // --- 적 ---
+  // --- Enemies ---
   for (const e of enemies) {
     if (e.dead > 0) { e.dead += dt; continue; }
     e.anim += dt;
@@ -911,7 +911,7 @@ function update(dt) {
       const amp = e.type === 'bee' ? 10 : 6, freq = e.type === 'bee' ? 4.5 : 3;
       e.y = e.anchorY + Math.sin(e.anim * freq) * amp;
     }
-    // 플레이어와 충돌
+    // collision with player
     if (overlaps(player, e)) {
       const stompable = e.type !== 'saw';
       if (stompable && player.vy > 40 && player.y + player.h - e.y < 12) {
@@ -926,7 +926,7 @@ function update(dt) {
   }
   enemies = enemies.filter(e => e.dead < 0.35);
 
-  // --- 파티클/팝업 ---
+  // --- Particles/popups ---
   for (const pt of particles) {
     pt.t += dt; pt.vy += 400 * dt;
     pt.x += pt.vx * dt; pt.y += pt.vy * dt;
@@ -936,8 +936,8 @@ function update(dt) {
   popups = popups.filter(pp => pp.t < 0.5);
 }
 
-// ---------- 렌더링 ----------
-// bg.png는 24px 8컬럼(0~7): 0~1 설원, 2~3 연한 숲, 4~5 사막 언덕, 6~7 초원 숲
+// ---------- Rendering ----------
+// bg.png is 24px, 8 columns (0~7): 0~1 snowfield, 2~3 pale forest, 4~5 desert hills, 6~7 grassland forest
 const THEMES = {
   green:  { skyTop: '#bdefff', skyBot: '#e3f8ff', bgCol: 6, topSet: T.TOP_GRASS },
   desert: { skyTop: '#ffe6b3', skyBot: '#fff4d6', bgCol: 4, topSet: T.TOP_SAND },
@@ -957,13 +957,13 @@ function render() {
   if (game.state === 'win') { renderWin(); return; }
 
   const theme = THEMES[level.theme];
-  // 하늘
+  // sky
   const g = ctx.createLinearGradient(0, 0, 0, VIEW_H);
   g.addColorStop(0, theme.skyTop); g.addColorStop(1, theme.skyBot);
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, VIEW_W, VIEW_H);
 
-  // 밤 테마: 별 (반짝임)
+  // night theme: stars (twinkling)
   if (theme.night) {
     for (let i = 0; i < 40; i++) {
       const sx = (i * 97 + 31) % VIEW_W, sy = (i * 61 + 13) % 120;
@@ -975,12 +975,12 @@ function render() {
     ctx.globalAlpha = 1;
   }
 
-  // 카메라
+  // camera
   const targetX = player.x + player.w / 2 - VIEW_W / 2;
   camX += (targetX - camX) * 0.15;
   camX = Math.max(0, Math.min(camX, level.w * TS - VIEW_W));
 
-  // 배경 지평선 (패럴랙스)
+  // background horizon (parallax)
   const bgc = theme.bgCol;
   const horizonY = VIEW_H - 96;
   const par = wrap(camX * 0.3, 48);
@@ -993,7 +993,7 @@ function render() {
       ctx.drawImage(IMG.bg, (bgc + 1) * 24, 48, 24, 24, wx + 24, y, 24, 24);
     }
   }
-  // 구름 (느린 패럴랙스)
+  // clouds (slow parallax)
   for (let i = 0; i < 8; i++) {
     const cx = wrap(i * 137 + 40 - camX * 0.5, VIEW_W + 80) - 40;
     const cy = 18 + (i * 53) % 60;
@@ -1008,7 +1008,7 @@ function render() {
   ctx.save();
   ctx.translate(-Math.round(camX), 0);
 
-  // 타일
+  // tiles
   const tx0 = Math.max(0, Math.floor(camX / TS)), tx1 = Math.min(level.w - 1, Math.ceil((camX + VIEW_W) / TS));
   for (let ty = 0; ty < level.h; ty++) {
     for (let tx = tx0; tx <= tx1; tx++) {
@@ -1078,13 +1078,13 @@ function render() {
     }
   }
 
-  // 상자 코인 팝업
+  // box coin popups
   for (const pp of popups) {
     const dy = -20 * Math.sin(Math.min(pp.t / 0.4, 1) * Math.PI);
     drawTile(T.COIN, pp.x, pp.y + dy);
   }
 
-  // 적
+  // enemies
   for (const e of enemies) {
     const f = Math.floor(e.anim * 6) % 2;
     if (e.dead > 0) {
@@ -1108,7 +1108,7 @@ function render() {
     }
   }
 
-  // 플레이어 (피격 시 깜빡임)
+  // player (blinks when hurt)
   if (Math.floor(player.iframes * 12) % 2 === 0) {
     const moving = Math.abs(player.vx) > 15;
     let frame = CH.PLAYER[0];
@@ -1116,7 +1116,7 @@ function render() {
     else if (moving) frame = CH.PLAYER[Math.floor(player.anim * 8) % 2];
     drawChar(frame, player.x - 5, player.y - 4, player.flip);
 
-    // 방어막 렌더
+    // shield render
     if (player.shieldHealth > 0) {
       ctx.save();
       ctx.globalAlpha = 0.6 + Math.sin(game.time * 4) * 0.2;
@@ -1129,7 +1129,7 @@ function render() {
     }
   }
 
-  // 파티클
+  // particles
   for (const pt of particles) {
     ctx.globalAlpha = 1 - pt.t / pt.life;
     ctx.fillStyle = pt.color;
@@ -1141,8 +1141,8 @@ function render() {
 
   renderHUD();
 
-  if (game.state === 'clear') renderOverlay('LEVEL CLEAR!', 'Enter 키로 다음 레벨');
-  if (game.state === 'gameover') renderOverlay('GAME OVER', 'Enter 키로 다시 시작');
+  if (game.state === 'clear') renderOverlay('LEVEL CLEAR!', 'Press Enter for next level');
+  if (game.state === 'gameover') renderOverlay('GAME OVER', 'Press Enter to restart');
 }
 
 function drawNumber(n, x, y) {
@@ -1163,21 +1163,21 @@ function renderHUD() {
     drawNumber(game.gems, 30, 48);
   }
 
-  // 더블 점프 표시
+  // double jump indicator
   if (player.doubleJumpsLeft > 0) {
     ctx.fillStyle = '#ffad28';
     ctx.font = 'bold 10px "Courier New", monospace';
     ctx.fillText('DJ:' + player.doubleJumpsLeft, 8, 68);
   }
 
-  // 방어막 표시
+  // shield indicator
   if (player.shieldHealth > 0) {
     ctx.fillStyle = player.shieldHealth > 1 ? '#ffb300' : '#ff6b6b';
     ctx.font = 'bold 10px "Courier New", monospace';
     ctx.fillText('SH:' + player.shieldHealth, 8, 80);
   }
 
-  // 열쇠 보유 표시
+  // key indicator
   if (player.hasKey) drawTile(T.KEY, VIEW_W - 26, 26);
 
   const w = worldOf(game.levelIdx);
@@ -1187,7 +1187,7 @@ function renderHUD() {
   ctx.fillText('W' + (w + 1) + ' ' + WORLDS[w].name + '  ' + (game.levelIdx + 1) + '/' + LEVELS.length, VIEW_W - 8, 18);
   ctx.textAlign = 'left';
 
-  // 월드 시작 배너
+  // world start banner
   if (game.bannerT > 0) {
     ctx.globalAlpha = Math.min(1, game.bannerT);
     ctx.fillStyle = 'rgba(20, 24, 46, 0.6)';
@@ -1253,12 +1253,12 @@ function renderTitle() {
   ctx.fillText('PIXEL ADVENTURE', VIEW_W / 2, 70);
   ctx.font = 'bold 10px "Courier New", monospace';
   ctx.fillStyle = '#4a5578';
-  ctx.fillText('이동: ← →  /  점프: Space  /  더블점프: 공중에서 Space  /  재시작: R', VIEW_W / 2, 105);
-  ctx.fillText('적을 밟아 무찌르고 문까지 도달하세요! (톱니는 밟기 금지)', VIEW_W / 2, 118);
-  ctx.fillText('S: 방어막  D: 더블점프  빨간 버섯: 슈퍼 점프  가시: 밟으면 아야!', VIEW_W / 2, 131);
+  ctx.fillText('Move: ← →  /  Jump: Space  /  Double jump: Space in air  /  Restart: R', VIEW_W / 2, 105);
+  ctx.fillText('Stomp enemies and reach the door! (don\'t stomp saws)', VIEW_W / 2, 118);
+  ctx.fillText('S: shield  D: double jump  Red mushroom: super jump  Spikes: ouch!', VIEW_W / 2, 131);
   ctx.font = 'bold 14px "Courier New", monospace';
   ctx.fillStyle = '#e2554d';
-  if (game.stateTime % 1 < 0.6) ctx.fillText('- Enter 키를 눌러 시작 -', VIEW_W / 2, 165);
+  if (game.stateTime % 1 < 0.6) ctx.fillText('- Press Enter to Start -', VIEW_W / 2, 165);
   ctx.textAlign = 'left';
 }
 
@@ -1273,9 +1273,9 @@ function renderWin() {
   ctx.fillText('YOU WIN!', VIEW_W / 2, 60);
   ctx.fillStyle = '#ffffff';
   ctx.font = 'bold 12px "Courier New", monospace';
-  ctx.fillText('모든 레벨을 클리어했습니다!', VIEW_W / 2, 85);
+  ctx.fillText('You cleared every level!', VIEW_W / 2, 85);
 
-  // 통계
+  // stats
   drawTile(T.COIN, VIEW_W / 2 - 50, 100);
   drawNumber(game.coins, VIEW_W / 2 - 26, 100);
   drawTile(T.GEM, VIEW_W / 2 + 10, 100);
@@ -1290,11 +1290,11 @@ function renderWin() {
 
   ctx.fillStyle = '#9bd4ff';
   ctx.font = 'bold 12px "Courier New", monospace';
-  if (game.stateTime % 1 < 0.6) ctx.fillText('- Enter 키로 다시 플레이 -', VIEW_W / 2, 220);
+  if (game.stateTime % 1 < 0.6) ctx.fillText('- Press Enter to Play Again -', VIEW_W / 2, 220);
   ctx.textAlign = 'left';
 }
 
-// ---------- 메인 루프 ----------
+// ---------- Main loop ----------
 let lastT = 0, acc = 0;
 const STEP = 1 / 60;
 function loop(t) {
@@ -1311,7 +1311,7 @@ Promise.all([
   loadImage('chars', 'assets/chars.png'),
   loadImage('bg', 'assets/bg.png'),
 ]).then(() => {
-  // 개발용: #dev<레벨>x<타일X> 로 바로 해당 위치에서 시작 (예: #dev1x60)
+  // Dev: #dev<level>x<tileX> starts right at that spot (e.g. #dev1x60)
   const m = location.hash.match(/^#dev(\d+)(?:x(\d+))?$/);
   if (m) {
     startGame();

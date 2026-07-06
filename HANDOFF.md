@@ -1,168 +1,168 @@
-# HANDOFF — 다음 작업자(Opus)를 위한 인수인계 문서
+# HANDOFF — Handoff Document for the Next Agent (Opus)
 
-> 최종 갱신: 2026-07-06. 대상: 이 프로젝트를 이어받는 AI 에이전트/개발자.
-> 이 문서만 읽고 바로 작업을 시작할 수 있도록 현재 상태, 설계 결정, 함정, 밀도 로드맵, 연재 확장 가이드를 정리했다.
-> 코드 전체 구조 설명은 `README.md`에 상세히 있으니 중복 내용은 생략한다.
+> Last updated: 2026-07-06. Audience: the AI agent/developer taking over this project.
+> This document is meant to be enough on its own to start working immediately: current state, design decisions, pitfalls, density roadmap, and the episodic expansion guide.
+> The full code structure is documented in `README.md`, so overlapping content is omitted here.
 
 ---
 
-## 1. 프로젝트 현재 상태
+## 1. Current Project State
 
-- **순수 바닐라 JS 단일 파일 게임** (`game.js` 하나, 빌드 없음, 의존성 없음). 이 구조 유지가 프로젝트의 의도다.
-- Kenney Pixel Platformer 에셋 기반 횡스크롤 플랫포머. 480×270 논리 해상도, 18px 타일.
-- **총 50스테이지 = 5월드 (10스테이지 = 1월드)**:
+- **Pure vanilla JS, single-file game** (one `game.js`, no build, no dependencies). Keeping this structure is intentional.
+- Side-scrolling platformer built on Kenney Pixel Platformer assets. 480×270 logical resolution, 18px tiles.
+- **50 stages total = 5 worlds (10 stages = 1 world)**:
 
-| 월드 | 스테이지 | 테마 | 해금 요소 | 오프닝 |
+| World | Stages | Theme | Unlocked elements | Opening |
 |---|---|---|---|---|
-| W1 초원 | 1~10 | green | 기본, 버섯 발판 | 수제 `buildLevel1` (스테이지 1) |
-| W2 사막 | 11~20 | desert | 가시 `^`, 워커 | 수제 `buildLevel2` (스테이지 11) |
-| W3 설원 | 21~30 | snow | 벌, 하트 `H`, 미끄러운 바닥 | 수제 `buildLevel3` (스테이지 21) |
-| W4 황야 | 31~40 | rock | 열쇠 `K` + 자물쇠 `L` 게이트 | 생성 |
-| W5 밤의 숲 | 41~50 | night | 전부 조합, 별하늘 | 생성 |
+| W1 Grassland | 1–10 | green | Basics, bounce mushroom | Handmade `buildLevel1` (stage 1) |
+| W2 Desert | 11–20 | desert | Spikes `^`, walkers | Handmade `buildLevel2` (stage 11) |
+| W3 Snowfield | 21–30 | snow | Bees, hearts `H`, slippery ground | Handmade `buildLevel3` (stage 21) |
+| W4 Badlands | 31–40 | rock | Key `K` + lock `L` gate | Generated |
+| W5 Night Forest | 41–50 | night | Everything combined, starry sky | Generated |
 
-- 나머지 스테이지는 시드 고정 절차 생성 (`buildGeneratedLevel(stage)`) — 같은 스테이지는 항상 같은 지형.
-- 마지막 주요 커밋: `15fa16c` (월드 구조), `a0d6319` (에셋 밀도), `59db7a3` (스테이지 4~50 생성기).
-- 리모트: https://github.com/gridnflow/pixel-adventure-game (main 브랜치)
+- All remaining stages are seeded procedural generation (`buildGeneratedLevel(stage)`) — the same stage always produces the same terrain.
+- Last major commits: `15fa16c` (world structure), `a0d6319` (asset density), `59db7a3` (stage 4–50 generator).
+- Remote: https://github.com/gridnflow/pixel-adventure-game (main branch)
 
-### 실행 방법
+### How to Run
 ```bash
 cd pixel-adventure-game
-python3 -m http.server 8080   # 8000 포트는 이 머신에서 다른 프로세스가 쓰는 경우가 있음
+python3 -m http.server 8080   # port 8000 is sometimes taken by another process on this machine
 open http://localhost:8080
 ```
-- 개발용 치트: `#dev37` (37스테이지 시작), `#dev31x200` (31스테이지 타일 X=200 지점 — 자물쇠 게이트 바로 앞)
-- 월드 입구: `#dev11` 사막, `#dev21` 설원, `#dev31` 황야, `#dev41` 밤의 숲
+- Dev cheats: `#dev37` (start at stage 37), `#dev31x200` (stage 31 at tile X=200 — right in front of the lock gate)
+- World entrances: `#dev11` Desert, `#dev21` Snowfield, `#dev31` Badlands, `#dev41` Night Forest
 
 ---
 
-## 2. 아키텍처 요점 (생성기 중심)
+## 2. Architecture Essentials (Generator-Centric)
 
-- `mulberry32(seed)` 시드 고정 PRNG, **시드 = `stage * 1013904223 + 5`**.
-- `WORLDS` 테이블 + `worldOf(levelIdx)` → 테마·해금 게이트 결정. 생성기는 `L.world`로 참조.
-- 난이도 `d = clamp((stage - 2) / 45, 0, 1)` — 적 수·톱니/워커 비율·구덩이 폭·맵 길이(최대 250타일)에 반영.
-- 세그먼트 함수 7종을 커서 `x`로 이어 붙임:
+- `mulberry32(seed)` seeded PRNG, **seed = `stage * 1013904223 + 5`**.
+- `WORLDS` table + `worldOf(levelIdx)` → determines theme and unlock gates. The generator reads `L.world`.
+- Difficulty `d = clamp((stage - 2) / 45, 0, 1)` — feeds into enemy count, saw/walker ratio, pit width, and map length (up to 250 tiles).
+- Seven segment functions are chained along a cursor `x`:
 
-| 함수 | 내용 | 뒤에 지면 강제? |
+| Function | Content | Forces ground after? |
 |---|---|---|
-| `segFlat` | 평지 + 코인/적/가시/하트/상자/장식/파워업 | – |
-| `segPit` | 물 깔린 구덩이 (4타일 이상이면 중간 발판) | ✅ `needGround` |
-| `segStones` | 물 위 징검다리 | – |
-| `segLadder` | 발판 사다리 + 보석 도전 | ✅ |
-| `segPlateau` | 고지대(top 7) 상승→낙하 | ✅ |
-| `segHill` | 계단 블록 언덕 | – |
-| `segBounce` | 구덩이 + 버섯 발판(슈퍼 점프) 보상 | ✅ |
+| `segFlat` | Flat ground + coins/enemies/spikes/hearts/boxes/decorations/powerups | – |
+| `segPit` | Water-filled pit (mid platform if 4+ tiles wide) | ✅ `needGround` |
+| `segStones` | Stepping stones over water | – |
+| `segLadder` | Platform ladder + gem challenge | ✅ |
+| `segPlateau` | Plateau (top 7) climb→drop | ✅ |
+| `segHill` | Stair-block hill | – |
+| `segBounce` | Pit + bounce mushroom (super jump) reward | ✅ |
 
-- `needGround` 플래그: 구덩이류 직후 반드시 `segFlat`. **이 로직을 깨면 클리어 불가능 맵이 나온다.**
-- W4+: 메인 루프 뒤에 열쇠 구간(발판+`K`) 삽입 → 골인 앞 9타일 자물쇠 기둥(`L`, 점프 불가 높이).
-- 보석은 `state.gem`으로 레벨당 최소 1개 보장.
-
----
-
-## 3. 반드시 지켜야 할 제약 (함정 목록)
-
-1. **점프 물리**: `GRAV=830, MOVE=130, JUMP_V=292, BOUNCE_V=460` → 단일 점프 가로 ~5타일·상승 ~2.5타일, 버섯 발판 ~7.5타일 상승. 생성 레벨은 단일 점프 기준으로만 설계(더블 점프는 여유분). 수제 스테이지 21의 7타일 구덩이는 더블 점프 전제의 의도적 설계.
-2. **PRNG 호출 순서가 곧 맵이다.** 세그먼트 함수의 `rng()` 호출을 추가/삭제/순서 변경하면 4~50 지형이 전부 바뀐다. 진행 저장 기능이 들어가면 `mapVersion`을 반드시 올릴 것.
-3. **그리드 기호** (`isSolid`: `# X ! x B L`): `=` 원웨이 발판, `^` 가시, `B` 버섯, `w` 물(장식), `H` 하트, `K` 열쇠, `d` 문. 소문자 장식은 `DECO_TILES` 테이블. 새 기호는 기존과 충돌 금지.
-4. **적 배치 y좌표**: `L.enemy(type, tx, ty)`의 `ty`는 "지면 top − 1". `loadLevel()`에서 `(ty+1)*TS - box.h`로 변환.
-5. **슬라임/톱니/워커는 낭떠러지 반전** AI. 폭 2타일 미만 지형에 배치 금지.
-6. **`LEVELS`는 팩토리 배열** — `LEVELS[idx]()`로 매번 새로 빌드. 스테이지 1/11/21은 수제 빌더, 나머지는 `buildGeneratedLevel.bind(null, s)`.
-7. **bg.png는 8컬럼(0~7)** — bgCol 페어: 0~1 설경, 2~3 연한 숲, 4~5 사막 언덕, 6~7 초원 숲. 범위 밖 인덱스는 조용히 안 그려진다(과거 실제로 있었던 버그).
-8. **밤 테마 UI 가독성**: HUD 텍스트는 `THEMES[...].night`일 때 밝은 색으로 전환된다. 어두운 배경에 요소를 추가할 때 항상 확인.
+- `needGround` flag: pit-type segments must be followed by `segFlat`. **Break this logic and you get unclearable maps.**
+- W4+: a key section (platforms + `K`) is inserted after the main loop → a 9-tile lock pillar (`L`, too tall to jump) before the goal.
+- Gems: `state.gem` guarantees at least 1 gem per level.
 
 ---
 
-## 4. 검증 방법 (커밋 전 3단계 — 필수)
+## 3. Hard Constraints (Pitfalls)
 
-### 4-1. 구조 정합성 (Node, 브라우저 불필요)
+1. **Jump physics**: `GRAV=830, MOVE=130, JUMP_V=292, BOUNCE_V=460` → a single jump covers ~5 tiles horizontally and ~2.5 tiles up; the bounce mushroom gives ~7.5 tiles of rise. Generated levels must be designed for single jump only (double jump is slack). The 7-tile pit in handmade stage 21 is an intentional double-jump design.
+2. **The PRNG call order IS the map.** Adding/removing/reordering `rng()` calls in segment functions regenerates all terrain for stages 4–50. If progress saving is ever added, you MUST bump `mapVersion`.
+3. **Grid symbols** (`isSolid`: `# X ! x B L`): `=` one-way platform, `^` spikes, `B` mushroom, `w` water (decoration), `H` heart, `K` key, `d` door. Lowercase decorations live in the `DECO_TILES` table. New symbols must not clash with existing ones.
+4. **Enemy placement y-coordinate**: in `L.enemy(type, tx, ty)`, `ty` is "ground top − 1". `loadLevel()` converts it via `(ty+1)*TS - box.h`.
+5. **Slimes/saws/walkers turn around at ledges.** Never place them on terrain less than 2 tiles wide.
+6. **`LEVELS` is an array of factories** — `LEVELS[idx]()` rebuilds the level each time. Stages 1/11/21 use handmade builders; the rest are `buildGeneratedLevel.bind(null, s)`.
+7. **bg.png has 8 columns (0–7)** — bgCol pairs: 0–1 snowscape, 2–3 light forest, 4–5 desert dunes, 6–7 grassland forest. Out-of-range indices silently draw nothing (this was a real bug in the past).
+8. **Night theme UI readability**: HUD text switches to bright colors when `THEMES[...].night`. Always double-check anything you add over dark backgrounds.
+
+---
+
+## 4. Verification (3 Steps Before Every Commit — Mandatory)
+
+### 4-1. Structural Integrity (Node, no browser needed)
 ```bash
 node tools/test-levels.js   # "all stages OK" + exit 0
 ```
-검사: 문 존재 / 스폰 안전 / 구덩이 폭 ≤3 (수제 21은 7 예외, `GAP_EXCEPTIONS`) / W4+ 열쇠 존재·자물쇠보다 앞.
-새 기믹을 넣으면 **여기에 검사를 같이 추가하는 것이 규칙** (예: 열쇠/자물쇠 검사처럼).
+Checks: door exists / spawn is safe / pit width ≤3 (handmade stage 21's 7 is an exception, `GAP_EXCEPTIONS`) / W4+ has a key and it comes before the lock.
+When you add a new gimmick, **adding a matching check here is the rule** (e.g. like the key/lock check).
 
-### 4-2. 렌더링 스모크 (헤드리스 Chrome)
+### 4-2. Rendering Smoke Test (headless Chrome)
 ```bash
 "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless --disable-gpu \
   --window-size=980,600 --virtual-time-budget=4000 \
   --screenshot=/tmp/stage.png "http://localhost:8080/#dev42"
 ```
-스크린샷을 **직접 읽고** 확인. 빈 화면 = 로드 실패. 테마별로 최소 1장씩.
+**Actually read** the screenshot and verify it. Blank screen = load failure. At least one shot per theme.
 
-### 4-3. 물리/메커닉 시뮬레이션 (Node vm)
-`game.js`를 vm 샌드박스로 로드하면 `loadLevel/update/player`가 그대로 노출된다. 플레이어를 순간이동시켜 `update(1/60)`를 돌리는 방식으로 바운스(-460 발사), 열쇠→게이트 해제 등을 검증해 왔다. 새 메커닉도 같은 방식으로 검증할 것. 샌드박스 스텁은 `tools/test-levels.js` 상단 참조.
-
----
-
-## 5. 밀도 로드맵 — 앞으로 "더 밀도 있게" 개발하는 법
-
-> 원칙: **스테이지 수를 늘리지 말고, 스테이지당 새로 배우는 것을 하나씩 넣어라.**
-> 지금 가장 큰 리스크는 생성 스테이지의 패턴이 10스테이지쯤이면 읽힌다는 것.
-> 아래 순서대로 하면 같은 노력 대비 체감 품질이 가장 크게 오른다.
-
-### 5-1. [P0] 게임필(juice) — 최소 비용, 최대 체감
-전부 몇 줄짜리 작업이고 에셋 불필요:
-- 착지/달리기 먼지 파티클 (`spawnBurst` 재활용, 흰색·2~3개·수명 짧게)
-- 밟기 성공 시 2~3프레임 히트스톱 (`update`에서 freeze 타이머 하나)
-- 피격 시 화면 흔들림 (camX/camY에 감쇠 오프셋)
-- 사운드 피치 ±10% 랜덤화 (`play()`에서 `a.playbackRate = 0.9 + Math.random()*0.2`)
-- 점프/착지 squash & stretch (drawChar에 scale 파라미터 추가)
-
-### 5-2. [P0] 월드별 시그니처 기믹 심화 (기승전결 배치)
-각 월드의 해금 기믹을 "도입→응용→조합→시험" 흐름으로 세그먼트를 추가해 심화한다.
-- 월드 첫 스테이지(x1): 안전한 곳에서 기믹 소개 (죽지 않는 배치)
-- 중반(x4~x7): 응용 세그먼트 (예: W2 가시+구덩이 조합, W3 미끄럼+징검다리)
-- 후반(x8~x9): 이전 월드 기믹과 조합
-- 마지막(x0): 시험 무대 → **월드 보스 스테이지로 교체하는 것이 이상적** (아래 5-3)
-- 구현: 세그먼트 풀을 `L.world`로 분기해 월드 전용 세그먼트를 추가. 예: W3 전용 "얼음 활강 + 점프" 세그먼트, W4 전용 "자물쇠 미로", W5 전용 "어둠 속 코인 길잡이".
-- ⚠️ 함정 #2: 세그먼트 추가는 rng 소비를 바꿔 지형이 재생성된다. 진행 저장 도입 전에 끝내거나 mapVersion을 올릴 것.
-
-### 5-3. [P1] 월드 보스 (10/20/30/40/50 스테이지)
-- 해당 스테이지만 생성기 대신 전용 빌더(짧은 아레나): `LEVELS` 조립 루프에서 `s % 10 === 0`이면 `buildBossLevel(world)`.
-- 에셋 후보 (chars.png 미사용분): C11/12 노란 성난 블록(쿵쿵이 패턴), C15~17 로켓(발사체), C21~23 파란 상자 몬스터(대형 보스 몸통), C26 드론.
-- 스펙 초안: 체력 3~5(밟기), 패턴 2개(돌진↔점프 또는 낙하물), 피격 무적 1초, 처치 시 문 등장.
-- `ENEMY_BOX`에 boss 추가 + update 루프 타입 분기. 밟기 판정은 기존 stomp 로직 재사용.
-
-### 5-4. [P1] 데이터 기반 난이도 튜닝
-- 죽은 위치(스테이지, 타일 x, 사인)를 localStorage에 쌓기만 해도 난이도 스파이크가 보인다.
-- 시뮬레이션 봇(우측 이동+점프 그리디)을 `tools/`에 추가해 "실제 클리어 가능"까지 자동 검증하면 4-1의 휴리스틱 한계(수직 극단 케이스)를 보완한다.
-- 튜닝 노브는 생성기 상수만: 적 확률 `0.35+d*0.55`, 톱니 `0.18+d*0.32`, 가시 `0.25+d*0.4`, 구덩이 폭 `2~3+round(d*2)`. **시드 공식은 건드리지 말 것.**
-
-### 5-5. [P1] 리텐션 구조 (진행 저장 + 별점)
-- localStorage 키 `pixelAdventure.v1` 하나에 JSON: 도달 최고 스테이지, 스테이지별 클리어/최단시간/별점, 최고 스코어, **mapVersion**.
-- 별점: 클리어 ★ / 코인 80% ★ / 보석 수집 ★ — 깬 스테이지를 다시 할 이유를 만든다.
-- 타이틀에 "이어하기 (W3-5)" + 스테이지 선택 화면(10×5 그리드, `game.state`에 `select` 추가).
-
-### 5-6. [P2] 앰비언트 연출 (테마 완성도)
-- W3 설원: 내리는 눈 파티클 / W5 밤: 반딧불이(어두운 배경에 부유 광점) / W2 사막: 아지랑이 or 굴러가는 덤불
-- 전부 파티클 시스템 재활용으로 가능. 별(밤) 구현이 참고 패턴: `render()`의 `theme.night` 분기.
-
-### 하지 말 것
-- 레벨 에디터/리플레이 등 인프라를 기믹·게임필보다 먼저 만들지 말 것 (유지보수 부채).
-- 빌드 도구/프레임워크 도입 금지.
-- 한 번에 여러 기능을 묶어서 커밋하지 말 것 — 기능 하나 → 3단계 검증(§4) → 커밋.
+### 4-3. Physics/Mechanics Simulation (Node vm)
+Loading `game.js` in a vm sandbox exposes `loadLevel/update/player` directly. Past verification worked by teleporting the player and stepping `update(1/60)` — e.g. bounce (-460 launch), key→gate unlock. Verify new mechanics the same way. See the top of `tools/test-levels.js` for the sandbox stubs.
 
 ---
 
-## 6. 연재(에피소드) 스테이지 확장 가이드 — W6+ / 스테이지 51+
+## 5. Density Roadmap — How to Develop "Denser" Going Forward
 
-월드 단위로 계속 연재하듯 확장할 수 있게 되어 있다. 새 월드 추가 절차:
+> Principle: **don't add more stages; add one new thing to learn per stage.**
+> The biggest risk right now is that generated-stage patterns become readable by around stage 10.
+> Following the order below gives the largest perceived-quality gain per unit of effort.
 
-1. **테마 준비**: `T`에 `TOP_*` 지형 세트(4개 인덱스, [단독,왼,중,오] 규약) 추가 → `THEMES`에 하늘색·bgCol·기믹 플래그 → `DECOS`에 장식 6개.
-   - 남은 에셋 후보: 용암/동굴(어두운 하늘 + `TOP_ROCK` 재활용 + 즉사 바닥), 버섯 왕국(빨간 버섯 12~15를 지형으로), 수중(물 타일 32~35/52~55 + 부력 물리).
-   - 미사용 타일 확인법: `game.js`의 `T` 테이블과 시트를 대조. 시트 열람은 스크래치패드에 3배 확대+인덱스 오버레이 HTML을 만들어 헤드리스 스크린샷(이 세션에서 쓴 방법).
-2. **WORLDS에 한 줄 추가** + `STAGE_COUNT` 상향 (예: 60). `worldOf`는 자동 대응.
-3. **월드 시그니처 기믹 1개** 추가 (§5-2 패턴). 해금은 `L.world >= 5` 게이트로.
-4. **오프닝 수제 레벨** 1개 작성 (`buildLevel4` 등) → `LEVELS` 조립 루프에 `s === 51` 분기.
-5. **검증 확장**: `tools/test-levels.js`에 새 기믹 검사 추가, 새 월드 스크린샷 확인.
-6. **문서**: README 월드 표 + 이 문서 §1 표 갱신.
+### 5-1. [P0] Game feel (juice) — minimum cost, maximum impact
+All of these are a few lines each and need no assets:
+- Landing/running dust particles (reuse `spawnBurst`, white, 2–3 particles, short lifetime)
+- 2–3 frame hitstop on a successful stomp (a single freeze timer in `update`)
+- Screen shake on hit (damped offset on camX/camY)
+- Randomize sound pitch ±10% (`a.playbackRate = 0.9 + Math.random()*0.2` in `play()`)
+- Squash & stretch on jump/landing (add a scale parameter to drawChar)
 
-연재 시 밸런스 주의: `d` 공식 분모(현재 45)를 총 스테이지에 맞게 늘리지 않으면 51+는 전부 d=1로 고정된다. 확장 시 `d = clamp((stage - 2) / (STAGE_COUNT - 5), 0, 1)`처럼 일반화할 것 — 단, 이는 기존 스테이지 지형도 바꾸므로(함정 #2) mapVersion 대응과 함께.
+### 5-2. [P0] Deepen each world's signature gimmick (setup→payoff pacing)
+Deepen each world's unlock gimmick by adding segments in an "introduce → apply → combine → test" arc.
+- First stage of a world (x1): introduce the gimmick somewhere safe (a layout that can't kill you)
+- Midway (x4–x7): applied segments (e.g. W2 spikes+pit combos, W3 slippery ground + stepping stones)
+- Late (x8–x9): combine with previous worlds' gimmicks
+- Final (x0): the exam stage → **ideally replaced with a world boss stage** (see 5-3)
+- Implementation: branch the segment pool on `L.world` and add world-specific segments. E.g. a W3-only "ice slide + jump" segment, a W4-only "lock maze", a W5-only "coin trail in the dark".
+- ⚠️ Pitfall #2: adding segments changes rng consumption and regenerates terrain. Finish this before introducing progress saving, or bump mapVersion.
+
+### 5-3. [P1] World bosses (stages 10/20/30/40/50)
+- For those stages only, use a dedicated builder (a short arena) instead of the generator: in the `LEVELS` assembly loop, if `s % 10 === 0` use `buildBossLevel(world)`.
+- Asset candidates (unused parts of chars.png): C11/12 yellow angry block (stomper pattern), C15–17 rocket (projectile), C21–23 blue box monster (large boss body), C26 drone.
+- Draft spec: 3–5 health (stompable), 2 patterns (charge↔jump or falling objects), 1s post-hit invincibility, door appears on defeat.
+- Add boss to `ENEMY_BOX` + a type branch in the update loop. Reuse the existing stomp logic for the stomp check.
+
+### 5-4. [P1] Data-driven difficulty tuning
+- Just logging death locations (stage, tile x, cause) to localStorage is enough to reveal difficulty spikes.
+- Adding a simulation bot (greedy move-right+jump) under `tools/` to automatically verify "actually clearable" would cover the heuristic gaps in 4-1 (extreme vertical cases).
+- Tuning knobs are generator constants only: enemy chance `0.35+d*0.55`, saws `0.18+d*0.32`, spikes `0.25+d*0.4`, pit width `2~3+round(d*2)`. **Do not touch the seed formula.**
+
+### 5-5. [P1] Retention structure (progress saving + star ratings)
+- One localStorage key `pixelAdventure.v1` holding JSON: highest stage reached, per-stage clear/best-time/stars, high score, **mapVersion**.
+- Stars: clear ★ / 80% of coins ★ / gem collected ★ — gives a reason to replay cleared stages.
+- Title screen "Continue (W3-5)" + a stage select screen (10×5 grid, add `select` to `game.state`).
+
+### 5-6. [P2] Ambient effects (theme polish)
+- W3 Snowfield: falling snow particles / W5 Night: fireflies (floating light dots on the dark background) / W2 Desert: heat haze or a tumbleweed
+- All doable by reusing the particle system. The stars (night) implementation is the reference pattern: the `theme.night` branch in `render()`.
+
+### Do NOT
+- Do not build infrastructure (level editor/replay etc.) before gimmicks and game feel (maintenance debt).
+- No build tools or frameworks.
+- Do not bundle multiple features into one commit — one feature → 3-step verification (§4) → commit.
 
 ---
 
-## 7. 작업 규칙 (이 리포 공통)
+## 6. Episodic Stage Expansion Guide — W6+ / Stage 51+
 
-- 커밋 메시지는 **영어**, **Co-Authored-By 줄 금지**.
-- 단일 `game.js` + 정적 서빙 구조 유지.
-- 레벨·생성기·물리 변경 시 §4의 3단계 검증 후 커밋.
-- 게임플레이 규칙이 바뀌면 `README.md`, 인수인계 상태가 바뀌면 이 파일을 갱신.
+The project is set up to keep expanding world by world, like an episodic series. Procedure for adding a new world:
+
+1. **Prepare the theme**: add a `TOP_*` terrain set to `T` (4 indices, [single,left,middle,right] convention) → add sky colors, bgCol, and gimmick flags to `THEMES` → add 6 decorations to `DECOS`.
+   - Remaining asset candidates: lava/cave (dark sky + reuse `TOP_ROCK` + instant-death floor), mushroom kingdom (red mushroom tiles 12–15 as terrain), underwater (water tiles 32–35/52–55 + buoyancy physics).
+   - To find unused tiles: compare the `T` table in `game.js` against the sheet. To view the sheet, build a 3x-zoomed HTML page with index overlays in the scratchpad and take a headless screenshot (the method used in this session).
+2. **Add one row to WORLDS** + raise `STAGE_COUNT` (e.g. 60). `worldOf` adapts automatically.
+3. **Add 1 world signature gimmick** (the §5-2 pattern). Gate the unlock with `L.world >= 5`.
+4. **Write 1 handmade opening level** (`buildLevel4` etc.) → add an `s === 51` branch to the `LEVELS` assembly loop.
+5. **Extend verification**: add a check for the new gimmick to `tools/test-levels.js`, screenshot the new world.
+6. **Docs**: update the README world table + the §1 table in this document.
+
+Balance caveat when serializing: if the denominator of the `d` formula (currently 45) isn't raised to match the total stage count, everything from 51+ is pinned at d=1. When expanding, generalize it, e.g. `d = clamp((stage - 2) / (STAGE_COUNT - 5), 0, 1)` — but note this also changes existing stage terrain (pitfall #2), so handle it together with mapVersion.
+
+---
+
+## 7. Working Rules (Repo-Wide)
+
+- Commit messages in **English**, **no Co-Authored-By lines**.
+- Keep the single `game.js` + static serving structure.
+- Any change to levels/generator/physics: run the 3-step verification in §4 before committing.
+- If gameplay rules change, update `README.md`; if the handoff state changes, update this file.
