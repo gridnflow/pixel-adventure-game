@@ -46,7 +46,7 @@ const result = vm.runInContext(`
       let support = false;
       for (let y = 0; y < L.h; y++) {
         const c = L.grid[y][x];
-        if (c === '#' || c === '=' || c === 'X' || c === '!') support = true;
+        if (c === '#' || c === '=' || c === 'X' || c === '!' || c === 'B') support = true;
       }
       run = support ? 0 : run + 1;
       maxRun = Math.max(maxRun, run);
