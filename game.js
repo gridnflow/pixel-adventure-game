@@ -300,7 +300,163 @@ function buildLevel3() {
   return L;
 }
 
+// ---------- 절차 생성 레벨 (스테이지 4~50) ----------
+// 시드 고정 난수: 같은 스테이지는 항상 같은 지형
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function ri(rng, min, max) { return min + Math.floor(rng() * (max - min + 1)); }
+
+const DECOS = { green: ['t', 'm', 't'], desert: ['c', 'c', 's'], mountain: ['t', 'm', 'c'] };
+
+// 평지: 코인/적/상자/장식 배치. 항상 지면으로 끝남
+function segFlat(L, x, rng, d) {
+  const len = ri(rng, 9, 14);
+  L.ground(x, x + len - 1, 12);
+  if (rng() < 0.8) {
+    const c0 = x + ri(rng, 1, 2);
+    L.coins(c0, Math.min(x + len - 2, c0 + ri(rng, 2, 4)), ri(rng, 8, 10));
+  }
+  const enemyN = rng() < 0.35 + d * 0.55 ? (rng() < d * 0.6 ? 2 : 1) : 0;
+  for (let i = 0; i < enemyN; i++) {
+    const type = rng() < 0.2 + d * 0.45 ? 'saw' : 'slime';
+    L.enemy(type, x + 3 + Math.floor(rng() * (len - 5)), 11);
+  }
+  if (rng() < 0.3) L.qbox(x + ri(rng, 2, len - 3), 8);
+  if (rng() < 0.25) {
+    const cx = x + ri(rng, 2, len - 3);
+    L.crate(cx, 11);
+    if (rng() < 0.5) L.crate(cx, 10);
+  }
+  if (rng() < 0.45) L.deco(x + ri(rng, 1, len - 2), 11, DECOS[L.theme][ri(rng, 0, 2)]);
+  if (rng() < 0.1 + d * 0.08) L.powerup(x + ri(rng, 2, len - 3), 9, rng() < 0.5 ? 'shield' : 'double');
+  return x + len;
+}
+
+// 구덩이: 넓으면 중간 발판 제공. 다음 세그먼트는 반드시 지면
+function segPit(L, x, rng, d) {
+  const gap = ri(rng, 2, 3 + Math.round(d * 2));   // 2~5
+  if (gap >= 4) {
+    const px = x + Math.floor(gap / 2) - 1;
+    L.plat(px, px + 1, 10);
+    L.coin(px, 8);
+    if (rng() < d * 0.5) L.enemy('fly', px, 6, { rangeX: 2 * TS });
+  } else if (rng() < 0.5) {
+    L.coin(x + Math.floor(gap / 2), 9);
+  }
+  return x + gap;
+}
+
+// 징검다리 섬들
+function segStones(L, x, rng, d) {
+  const n = ri(rng, 2, 3);
+  for (let i = 0; i < n; i++) {
+    x += ri(rng, 2, 3);
+    const w = ri(rng, 2, 3);
+    L.ground(x, x + w - 1, 12);
+    if (rng() < 0.6) L.coin(x + Math.floor(w / 2), 9);
+    if (rng() < d * 0.35 && w >= 3) L.enemy('slime', x + 1, 11);
+    x += w;
+  }
+  return x;
+}
+
+// 구덩이 위 발판 사다리 (보석 도전). 다음 세그먼트는 반드시 지면
+function segLadder(L, x, rng, d, state) {
+  L.plat(x + 1, x + 2, 10);
+  L.plat(x + 4, x + 5, 8);
+  L.plat(x + 7, x + 8, 6);
+  L.coin(x + 1, 8); L.coin(x + 4, 6);
+  if (!state.gem && rng() < 0.7) { L.gem(x + 7, 4); state.gem = true; }
+  else L.coin(x + 7, 4);
+  L.plat(x + 10, x + 11, 9);
+  if (rng() < 0.3 + d * 0.5) L.enemy('fly', x + 5, 5, { rangeX: 2 * TS });
+  return x + 13;
+}
+
+// 계단 언덕
+function segHill(L, x, rng, d) {
+  const len = ri(rng, 10, 14);
+  L.ground(x, x + len - 1, 12);
+  const sx = x + 2;
+  L.block(sx, 11);
+  L.block(sx + 1, 11); L.block(sx + 1, 10);
+  L.block(sx + 2, 11); L.block(sx + 2, 10); L.block(sx + 2, 9);
+  L.coins(sx, sx + 2, 7);
+  if (rng() < 0.4 + d * 0.5) L.enemy(rng() < d * 0.5 ? 'saw' : 'slime', x + len - 3, 11);
+  if (rng() < 0.4) L.deco(x + len - 2, 11, DECOS[L.theme][ri(rng, 0, 2)]);
+  return x + len;
+}
+
+// 높은 지대: 발판으로 상승 → 고지대 → 오른쪽 끝에서 낙하. 다음은 반드시 지면
+function segPlateau(L, x, rng, d, state) {
+  L.plat(x + 1, x + 2, 10);
+  L.plat(x + 4, x + 5, 8);
+  const len = ri(rng, 9, 13);
+  L.ground(x + 7, x + 7 + len - 1, 7);
+  L.coins(x + 8, x + 8 + Math.min(3, len - 3), 5);
+  const enemyN = rng() < 0.5 + d * 0.5 ? (rng() < d * 0.5 ? 2 : 1) : 0;
+  for (let i = 0; i < enemyN; i++) {
+    L.enemy(rng() < 0.25 + d * 0.4 ? 'saw' : 'slime', x + 9 + Math.floor(rng() * (len - 4)), 6);
+  }
+  if (rng() < 0.35) L.qbox(x + 8 + ri(rng, 1, len - 3), 3);
+  if (!state.gem && rng() < 0.35) { L.gem(x + 7 + Math.floor(len / 2), 2); state.gem = true; }
+  return x + 7 + len;
+}
+
+function buildGeneratedLevel(stage) {
+  const rng = mulberry32(stage * 1013904223 + 5);
+  const d = Math.min(1, (stage - 3) / 40);          // 난이도 0(4스테이지)→1(43+)
+  const themes = ['green', 'desert', 'mountain'];
+  const theme = themes[(stage - 1) % 3];
+  const width = Math.min(150 + stage * 2, 250);
+  const L = new LevelBuilder(width, 15, theme);
+  const state = { gem: false };
+
+  // 시작 안전 지대
+  L.spawn(3, 9);
+  L.ground(0, 11, 12);
+  L.deco(4, 11, 's');
+  L.coins(7, 9, 10);
+
+  let x = 12;
+  let needGround = false;   // 구덩이류 다음엔 반드시 지면
+  while (x < width - 26) {
+    if (needGround) {
+      x = segFlat(L, x, rng, d);
+      needGround = false;
+      continue;
+    }
+    const r = rng();
+    if (r < 0.24) { x = segPit(L, x, rng, d); needGround = true; }
+    else if (r < 0.40) { x = segStones(L, x, rng, d); }
+    else if (r < 0.54) { x = segLadder(L, x, rng, d, state); needGround = true; }
+    else if (r < 0.68) { x = segPlateau(L, x, rng, d, state); needGround = true; }
+    else if (r < 0.82) { x = segHill(L, x, rng, d); }
+    else { x = segFlat(L, x, rng, d); }
+  }
+
+  // 골인 구간
+  L.ground(x, width - 1, 12);
+  if (!state.gem) L.gem(x + 2, 9);
+  L.coins(width - 12, width - 9, 9);
+  if (d > 0.3) L.enemy('slime', width - 10, 11);
+  L.deco(width - 7, 11, DECOS[theme][0]);
+  L.door(width - 4, 11);
+  return L;
+}
+
+const STAGE_COUNT = 50;
 const LEVELS = [buildLevel1, buildLevel2, buildLevel3];
+for (let s = 4; s <= STAGE_COUNT; s++) {
+  LEVELS.push(buildGeneratedLevel.bind(null, s));
+}
 
 // ---------- 게임 상태 ----------
 const game = {
@@ -398,6 +554,7 @@ function nextLevel() {
 
   game.levelIdx++;
   game.levelTime = 0;
+  game.hearts = 3;      // 스테이지 클리어 시 하트 회복 (50스테이지 완주용)
   if (game.levelIdx >= LEVELS.length) {
     game.state = 'win'; game.stateTime = 0;
     play('win', 0.7);
